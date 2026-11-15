@@ -54,7 +54,7 @@ MyTvApp threats
 - Only `http`, `https`, `rtmp(s)`, `rtsp`, `rtp`, `udp` and `mms` addresses become channels. Logos must be `http` or `https`.
 - Playlists over 40 MB are refused.
 - A user agent given by a playlist is handed to the player only as one line of printable characters, at most 300 long, so it cannot add request headers of its own.
-- `scripts/test.js` contains hostile-playlist cases.
+- `test/app.test.js` and `test/defences.test.js` contain hostile-playlist cases.
 
 **Self-update**
 - Updates come over HTTPS from exactly two addresses, both for this repository: GitHub's commit lookup (which commit `main`, or `dev` in Developer mode, points at) and the files of that commit. `scripts/check.sh` fails if any other address appears. The address override used for testing only works on `localhost`.

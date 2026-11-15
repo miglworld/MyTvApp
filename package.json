@@ -12,8 +12,8 @@
   ],
   "license": "UNLICENSED",
   "scripts": {
-    "test": "node --test test/*.test.js && node scripts/test-guide.js && node scripts/test.js",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=scripts/build-guide.js --test-coverage-lines=90 --test-coverage-branches=70 --test-coverage-functions=85 test/*.test.js",
+    "test": "node --test test/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=scripts/build-guide.js --test-coverage-lines=90 --test-coverage-branches=90 --test-coverage-functions=85 test/*.test.js",
     "test:e2e": "playwright test e2e/app.spec.js",
     "test:crawl": "playwright test e2e/crawl.spec.js",
     "bench": "node perf/bench.js"

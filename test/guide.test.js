@@ -1,23 +1,9 @@
-// Tests for scripts/build-guide.js. Run with: node scripts/test-guide.js
+// Tests for scripts/build-guide.js. Run with: npm test
 'use strict';
 var assert = require('assert');
-var guide = require('./build-guide.js');
+var guide = require('../scripts/build-guide.js');
 
-var passed = 0;
-var pending = [];
-function test(name, fn) {
-    try { fn(); passed++; } catch (e) {
-        console.error('FAIL: ' + name + '\n  ' + e.message);
-        process.exitCode = 1;
-    }
-}
-// For tests that wait on a promise (the download path).
-function testAsync(name, fn) {
-    pending.push(fn().then(function () { passed++; }, function (e) {
-        console.error('FAIL: ' + name + '\n  ' + e.message);
-        process.exitCode = 1;
-    }));
-}
+var test = require('node:test');
 
 // A stand-in for fetch: answers from a table of addresses.
 function fakeFetch(routes) {
@@ -76,14 +62,14 @@ test('a port other than 443 is refused', function () {
     assert.strictEqual(guide.sourceUrl('https://iptv-epg.org:443/x.xml'), 'https://iptv-epg.org/x.xml');
 });
 
-testAsync('a source on an allowed host is downloaded', function () {
+test('a source on an allowed host is downloaded', function () {
     var f = guide.fetchSource('https://iptv-epg.org/files/epg-pt.xml', fakeFetch({
         'https://iptv-epg.org/files/epg-pt.xml': { body: '<tv/>' }
     }), 0);
     return f.then(function (text) { assert.strictEqual(text, '<tv/>'); });
 });
 
-testAsync('a redirect to another allowed host is followed', function () {
+test('a redirect to another allowed host is followed', function () {
     var f = guide.fetchSource('https://iptv-epg.org/a.xml', fakeFetch({
         'https://iptv-epg.org/a.xml': { status: 301, location: 'https://iptv-org.github.io/b.xml' },
         'https://iptv-org.github.io/b.xml': { body: 'moved' }
@@ -91,7 +77,7 @@ testAsync('a redirect to another allowed host is followed', function () {
     return f.then(function (text) { assert.strictEqual(text, 'moved'); });
 });
 
-testAsync('a relative redirect is resolved against the address it came from', function () {
+test('a relative redirect is resolved against the address it came from', function () {
     var f = guide.fetchSource('https://iptv-epg.org/a.xml', fakeFetch({
         'https://iptv-epg.org/a.xml': { status: 302, location: '/files/b.xml' },
         'https://iptv-epg.org/files/b.xml': { body: 'relative' }
@@ -99,7 +85,7 @@ testAsync('a relative redirect is resolved against the address it came from', fu
     return f.then(function (text) { assert.strictEqual(text, 'relative'); });
 });
 
-testAsync('a redirect to a host outside the list is refused, not followed', function () {
+test('a redirect to a host outside the list is refused, not followed', function () {
     var routes = {
         'https://iptv-epg.org/a.xml': { status: 301, location: 'https://attacker.example/guide.xml' },
         'https://attacker.example/guide.xml': { body: '<tv>poisoned</tv>' }
@@ -107,23 +93,23 @@ testAsync('a redirect to a host outside the list is refused, not followed', func
     return expectRejects(guide.fetchSource('https://iptv-epg.org/a.xml', fakeFetch(routes), 0), /host not allowed: attacker\.example/);
 });
 
-testAsync('a redirect to plain HTTP is refused', function () {
+test('a redirect to plain HTTP is refused', function () {
     var routes = { 'https://iptv-epg.org/a.xml': { status: 301, location: 'http://iptv-epg.org/a.xml' } };
     return expectRejects(guide.fetchSource('https://iptv-epg.org/a.xml', fakeFetch(routes), 0), /not an HTTPS address/);
 });
 
-testAsync('redirects that loop stop after a few hops', function () {
+test('redirects that loop stop after a few hops', function () {
     var routes = { 'https://iptv-epg.org/a.xml': { status: 301, location: 'https://iptv-epg.org/a.xml' } };
     return expectRejects(guide.fetchSource('https://iptv-epg.org/a.xml', fakeFetch(routes), 0), /too many redirects/);
 });
 
-testAsync('a bad address is a rejected promise, not a throw', function () {
+test('a bad address is a rejected promise, not a throw', function () {
     var p;
     assert.doesNotThrow(function () { p = guide.fetchSource('https://example.com/x.xml', fakeFetch({}), 0); });
     return expectRejects(p, /host not allowed: example\.com/);
 });
 
-testAsync('an error status is reported with its address', function () {
+test('an error status is reported with its address', function () {
     var routes = { 'https://iptv-epg.org/a.xml': { status: 404 } };
     return expectRejects(guide.fetchSource('https://iptv-epg.org/a.xml', fakeFetch(routes), 0), /HTTP 404 for https:\/\/iptv-epg\.org\/a\.xml/);
 });
@@ -170,6 +156,3 @@ test('long descriptions are cut', function () {
     assert.strictEqual(channels['a.pt'][0][3].slice(-1), '…');
 });
 
-Promise.all(pending).then(function () {
-    if (!process.exitCode) console.log(passed + ' guide tests passed');
-});

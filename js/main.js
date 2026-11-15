@@ -1,3 +1,17 @@
+// MyTvApp: the whole app, in one file because the self-update downloads exactly
+// three files (index.html, css/style.css, this script).
+//
+// Contents, in file order:
+//   Settings and constants        State
+//   Remote keys, focus manager     Messages, dialogs and screens
+//   Side menu                      Programme guide: now and next; TV Guide screen
+//   Live TV screen                 Playlists: reading, storing, downloading
+//   Favorites                      Settings screen
+//   Self-update                    Add or edit a playlist
+//   Playback: preview, full screen and the three players
+//   Channel list over the video, number keys
+//   Back key, exit, key handling   Start-up
+//
 // Runs as soon as it is loaded: this script is the last element of <body>, so
 // the whole page already exists. It must not wait for DOMContentLoaded: when
 // js/boot.js starts a downloaded copy of this script, that event is long past.
@@ -11,7 +25,7 @@
 })(function () {
     'use strict';
 
-    // Under Node (scripts/test.js) there is no page: hand out the functions
+    // Under Node (the tests in test/) there is no page: hand out the functions
     // that do not need one and stop here.
     if (typeof document === 'undefined') {
         if (typeof module !== 'undefined') module.exports = {
@@ -39,9 +53,8 @@
     var REOPEN_PENDING_KEY = 'iptv_reopen_pending';
     var LOG_KEY = 'iptv_log';
 
-    // Self-update: where the current app is published (GitHub Pages, served
-    // from the repo's main branch) and where a downloaded copy is kept. The
-    // keys are shared with js/boot.js, which starts a downloaded copy.
+    // Self-update: where updates come from and where a downloaded copy is
+    // kept. The storage keys are shared with js/boot.js, which starts it.
     // An update is one exact commit of the repository: the app first asks
     // GitHub which commit a branch points at, then downloads every file from
     // that commit. (Fetching the files by branch name does not work: GitHub
@@ -243,7 +256,6 @@
     // whatever version it holds, not only to higher ones.
     var developerMode = false;
     try { developerMode = localStorage.getItem(DEVELOPER_MODE_KEY) === '1'; } catch (e) { developerMode = false; }
-    var bootTime = Date.now();
 
     // Diagnostics: a TV has no console, so the last few events are kept in
     // storage and listed at the bottom of Settings. They survive a restart,
@@ -466,9 +478,9 @@
     }
 
     // ==========================================================================
-    // Side menu: Live TV (every channel), Favorites, one entry per category of
-    // the active playlists, and Settings. Moving through it changes the channel
-    // list at once; OK or Right goes into the list.
+    // Side menu: Live TV, TV Guide, Favorites and Settings. Live TV opens its
+    // own menu in the same place (All channels, then the categories); moving
+    // through it changes the channel list at once. OK or Right goes into the list.
     // ==========================================================================
     function setMenuMode(mode) {
         state.menuMode = mode;
@@ -744,10 +756,7 @@
                 } catch (e) { /* unusable copy: download */ }
             }
             if (fresh) return;
-            return fetchWithTimeout(GUIDE_URL).then(function (res) {
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                return res.text();
-            }).then(function (text) {
+            return fetchText(GUIDE_URL).then(function (text) {
                 if (text.length > GUIDE_MAX_CHARS) throw new Error('guide is too large');
                 var n = useGuide(text);
                 cachePut(GUIDE_ENTRY, text);
@@ -1309,9 +1318,8 @@
     }
 
     // ==========================================================================
-    // Playlists (multiple, persisted; add/edit/delete via Settings). The
-    // built-in default is the real iptv-org country-indexed catalog, not a
-    // local test stub.
+    // Playlists: several can be on at once. They are added, edited and deleted
+    // in Settings, and their text is kept on the TV between starts.
     // ==========================================================================
     function loadPlaylistsFromStorage() {
         var stored = null;
@@ -1363,16 +1371,17 @@
         }
     }
 
-    // Fetches every currently-active playlist in parallel and merges their
-    // channels. Each playlist is fetched/parsed independently — one bad URL
-    // shows an error for that playlist without blanking out the others.
-    // Used only for the initial bulk load at boot; interactive add/toggle/
-    // remove use the targeted helpers below instead, so a single playlist
-    // change doesn't have to wait on (or re-fetch) every other active one.
-    // A hung fetch (no route to the host, rather than a fast connection
-    // refusal) would otherwise never resolve or reject, leaving the loading
-    // indicator stuck on screen forever with nothing left to clear it.
-    // options: extra fetch settings (headers), optional.
+    // fetch with a time limit. A request that hangs (no route to the host,
+    // rather than a quick refusal) would otherwise never settle, and the
+    // loading indicator would stay on screen. options: extra fetch settings.
+    // Downloads a text file. Rejects on a time-out or an HTTP error status.
+    function fetchText(url, options) {
+        return fetchWithTimeout(url, options).then(function (res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.text();
+        });
+    }
+
     function fetchWithTimeout(url, options) {
         return new Promise(function (resolve, reject) {
             var settled = false;
@@ -1477,8 +1486,7 @@
 
     // Downloads a playlist, stores its text and resolves to { channels, text }.
     function downloadPlaylist(pl) {
-        return fetchWithTimeout(pl.url)
-            .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.text(); })
+        return fetchText(pl.url)
             .then(function (text) {
                 // A playlist far beyond any real one would only exhaust the TV's memory and storage.
                 if (text.length > PLAYLIST_MAX_CHARS) throw new Error('Playlist is too large');
@@ -2081,13 +2089,6 @@
         return !!window.MYTVAPP_BUNDLED && (location.protocol.indexOf('http') !== 0 || location.hostname === 'localhost');
     }
 
-    function fetchUpdateText(url, options) {
-        return fetchWithTimeout(url, options).then(function (res) {
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return res.text();
-        });
-    }
-
     // manual: started from Settings, so it reports back and may restart at once.
     function checkForUpdate(manual) {
         if (!updatesPossible() || (!autoUpdate && !manual)) return;
@@ -2103,7 +2104,7 @@
             try { override = localStorage.getItem(UPDATE_URL_KEY); } catch (e) { override = null; }
         }
         var findBase = override ? Promise.resolve(override)
-            : fetchUpdateText(UPDATE_API + branch, { headers: { Accept: 'application/vnd.github.sha' } }).then(function (sha) {
+            : fetchText(UPDATE_API + branch, { headers: { Accept: 'application/vnd.github.sha' } }).then(function (sha) {
                 sha = String(sha).trim();
                 if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error('unexpected answer for the ' + branch + ' commit');
                 return UPDATE_RAW + sha + '/';
@@ -2111,7 +2112,7 @@
 
         findBase.then(function (found) {
             base = found;
-            return fetchUpdateText(base + 'package.json');
+            return fetchText(base + 'package.json');
         }).then(function (text) {
             version = String(JSON.parse(text).version || '');
             var wanted = developerMode ? (version !== '' && version !== APP_VERSION) : versionNewer(version, APP_VERSION);
@@ -2137,9 +2138,9 @@
                 return null;
             }
             return Promise.all([
-                fetchUpdateText(base + 'index.html'),
-                fetchUpdateText(base + 'css/style.css'),
-                fetchUpdateText(base + 'js/main.js')
+                fetchText(base + 'index.html'),
+                fetchText(base + 'css/style.css'),
+                fetchText(base + 'js/main.js')
             ]);
         }).then(function (files) {
             if (!files) return;
