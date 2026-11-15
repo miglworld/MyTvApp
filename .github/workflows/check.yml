@@ -10,9 +10,15 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same branch makes the older run pointless: cancel it.
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,3 +30,24 @@ jobs:
         env:
           BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
         run: ./scripts/check.sh
+
+  # The package is what TVs get from a release, so it must build from a clean
+  # checkout, and contain every file the app starts from.
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the package
+        run: ./scripts/build-wgt.sh
+      - name: Check the package contents
+        run: |
+          for f in config.xml index.html icon.png css/style.css js/boot.js js/main.js lib/hls.min.js; do
+            unzip -Z1 MyTvApp.wgt | grep -qx "$f" || { echo "missing from the package: $f"; exit 1; }
+          done
+      - name: Keep the package for download
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyTvApp-wgt
+          path: MyTvApp.wgt
+          retention-days: 14
