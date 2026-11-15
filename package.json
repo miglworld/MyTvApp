@@ -1,6 +1,6 @@
 {
   "name": "mytvapp",
-  "version": "0.12.3",
+  "version": "0.12.4",
   "description": "IPTV player for Samsung TVs: playlists, favorites, channel list, number zapping",
   "packageType": "app",
   "appName": "MyTvApp",
@@ -30,6 +30,7 @@
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.56.1",
     "eslint": "10.15.0",
-    "globals": "17.14.0"
+    "globals": "17.14.0",
+    "jsqr": "1.4.0"
   }
 }
