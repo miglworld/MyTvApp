@@ -2,6 +2,10 @@
 
 MyTvApp's own history starts at v0.1. Newest first. Each entry also names the version number the app showed at the time.
 
+## v0.12.2 (2026-11-15)
+- Caption shade: its offset now comes from the sidebar's width token instead of a fixed number.
+- Repository: the guide job checks every redirect against its host list and refuses ports other than 443; a bad playlist address now produces the same error message as a bad feed address.
+
 ## v0.12.1 (2026-11-12)
 - The shade behind the Live TV caption now reaches the left edge of the picture; it used to stop where the menu ends, leaving a visible seam.
 - Repository: the guide job only downloads HTTPS sources on allowed hosts; new README with screenshots, and the script that takes them.
