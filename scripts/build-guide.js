@@ -166,43 +166,48 @@ function fetchSource(address, fetchImpl, redirects) {
     });
 }
 
-// Node's fetch keeps no cookies and adds no headers of this job's own.
-function download(address) {
-    return fetchSource(address, fetch, 0);
-}
-
-function main() {
-    var out = process.argv[2] || 'guide.json';
+// Builds the guide in memory from the configured playlists and feeds. fetchImpl
+// and now are parameters so tests can run the whole build on fixtures, with no
+// network. Rejects if nothing was found: the published guide then stays as it is.
+function buildGuide(config, fetchImpl, now, log) {
     var hours = config.hours || 48;
-    var now = Math.floor(Date.now() / 1000);
     var wanted = Object.create(null);
     var channels = Object.create(null);
+    log = log || function () {};
 
-    return Promise.all(config.playlists.map(download)).then(function (playlists) {
+    return Promise.all(config.playlists.map(function (address) {
+        return fetchSource(address, fetchImpl, 0);
+    })).then(function (playlists) {
         playlists.forEach(function (m3u) { Object.assign(wanted, playlistKeys(m3u)); });
-        console.log('channels in the playlists: ' + Object.keys(wanted).length);
+        log('channels in the playlists: ' + Object.keys(wanted).length);
         // One feed after another: each is large.
-        return config.feeds.reduce(function (chain, url) {
-            return chain.then(function () { return download(url); }).then(function (xml) {
+        return config.feeds.reduce(function (chain, address) {
+            return chain.then(function () { return fetchSource(address, fetchImpl, 0); }).then(function (xml) {
                 var added = addProgrammes(channels, xml, wanted, now, hours);
-                console.log(url + ': ' + (xml.length / 1e6).toFixed(1) + ' MB, ' + added + ' programmes kept');
+                log(address + ': ' + (xml.length / 1e6).toFixed(1) + ' MB, ' + added + ' programmes kept');
             });
         }, Promise.resolve());
     }).then(function () {
         tidy(channels);
         var total = Object.keys(channels).reduce(function (n, k) { return n + channels[k].length; }, 0);
-        // An empty guide means a feed is broken or has changed: fail, so the
-        // guide that is already published stays as it is.
         if (!total) throw new Error('no programmes found for any channel');
-        var json = JSON.stringify({ generated: now, hours: hours, channels: channels });
+        return { hours: hours, channels: channels, total: total };
+    });
+}
+
+function main() {
+    var out = process.argv[2] || 'guide.json';
+    var now = Math.floor(Date.now() / 1000);
+    return buildGuide(config, fetch, now, console.log).then(function (built) {
+        var json = JSON.stringify({ generated: now, hours: built.hours, channels: built.channels });
         fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
         fs.writeFileSync(out, json);
-        console.log('wrote ' + out + ': ' + Object.keys(channels).length + ' channels, ' + total + ' programmes, ' +
+        console.log('wrote ' + out + ': ' + Object.keys(built.channels).length + ' channels, ' + built.total + ' programmes, ' +
             Math.round(Buffer.byteLength(json) / 1024) + ' KB');
     });
 }
 
-module.exports = { sourceUrl: sourceUrl, fetchSource: fetchSource, channelKey: channelKey, playlistKeys: playlistKeys, parseXmltvTime: parseXmltvTime, addProgrammes: addProgrammes, tidy: tidy };
+module.exports = { buildGuide: buildGuide, sourceUrl: sourceUrl, fetchSource: fetchSource, channelKey: channelKey, playlistKeys: playlistKeys, parseXmltvTime: parseXmltvTime, addProgrammes: addProgrammes, tidy: tidy };
 
 if (require.main === module) {
     main().catch(function (err) { console.error('guide not built: ' + err.message); process.exit(1); });

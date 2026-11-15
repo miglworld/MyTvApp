@@ -1981,7 +1981,10 @@
             summary.textContent = sectionSummary(i);
             btn.appendChild(label);
             btn.appendChild(summary);
+            // A click opens the section too, not only a move of the remote onto it.
             btn.addEventListener('click', function () {
+                state.settingsSection = i;
+                renderSettings();
                 if (settingLines().length) Focus.setZone('settingsRows', 0, 0);
             });
             cats.appendChild(btn);
