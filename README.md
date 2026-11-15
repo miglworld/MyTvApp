@@ -185,7 +185,7 @@ The TV does not read a full programme guide itself: one country's guide is tens 
 
 - `guide/config.json`: `playlists` (whose channels to keep), `feeds` (XMLTV guide files), `hours`.
 - Channels are matched by the playlist's `tvg-id` without its `@...` ending, in lower case.
-- The job only downloads HTTPS addresses on the hosts listed in `ALLOWED_HOSTS` in `scripts/build-guide.js`. A feed on a new server means adding its host there.
+- The job only downloads HTTPS addresses on the hosts listed in `ALLOWED_HOSTS` in `scripts/build-guide.js`, including any address it is redirected to. A feed on a new server means adding its host there.
 - The guide data comes from a third-party feed (iptv-epg.org at present) and is republished here in trimmed form. A channel the feed does not cover has no guide, and only playlists in `guide/config.json` get one.
 - To build it by hand: `node scripts/build-guide.js out/guide.json`. To run the job now: `gh workflow run guide.yml`.
 
