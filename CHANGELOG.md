@@ -1,6 +1,12 @@
 # Changelog
 
-MyTvApp's own history starts at v0.1. Newest first. Each entry also names the version number the app showed at the time.
+MyTvApp's own history starts at v0.1. Newest first.
+
+## v0.12.3 (2026-11-15)
+- Settings: choosing a section with OK now opens it; before, only moving onto it did.
+- A playlist group called `__proto__` no longer stops the channel list from loading.
+- The app page has a Content Security Policy: scripts and styles come only from the app itself, and plugins, frames and forms from other sites are refused.
+- Repository: browser tests, a page crawler, a performance comparison and security scans (secret scan, dependency audit, Semgrep, ZAP, Lighthouse) run in CI; ESLint keeps the app script to what the TV runs; dead code removed; owner licence added.
 
 ## v0.12.2 (2026-11-15)
 - Caption shade: its offset now comes from the sidebar's width token instead of a fixed number.
