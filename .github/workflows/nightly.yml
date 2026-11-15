@@ -1,0 +1,62 @@
+name: Nightly
+
+# Longer runs that would slow every push: an OWASP ZAP baseline scan and
+# Lighthouse measurements. Both run against the
+# app served from this checkout on localhost, never against GitHub Pages or any
+# other host.
+on:
+  schedule:
+    - cron: '41 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22.12.0'
+
+jobs:
+  dast:
+    name: ZAP baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Serve the app on localhost
+        run: python3 -m http.server 8765 --bind 127.0.0.1 &
+      # Report only: the findings are about the test server's headers, and the
+      # real host is GitHub Pages, whose headers this repository cannot set.
+      - name: OWASP ZAP baseline 2.16.0
+        run: >
+          docker run --rm --network host -v "$PWD:/zap/wrk:rw"
+          ghcr.io/zaproxy/zaproxy:2.16.0
+          zap-baseline.py -t http://127.0.0.1:8765/index.html -r zap-report.html -I
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: zap-report.html
+          retention-days: 30
+          if-no-files-found: ignore
+
+  lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      # Measures only: limits for LCP, CLS and INP need agreed targets first.
+      - name: Lighthouse CI 0.14.0 on the app page
+        run: >
+          npx --yes @lhci/cli@0.14.0 collect
+          --staticDistDir=. --url=http://localhost/index.html --numberOfRuns=3
+          && npx --yes @lhci/cli@0.14.0 upload --target=filesystem --outputDir=lighthouse
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse
+          path: lighthouse/
+          retention-days: 30
+          if-no-files-found: ignore
