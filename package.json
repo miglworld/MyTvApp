@@ -16,7 +16,8 @@
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=scripts/build-guide.js --test-coverage-lines=90 --test-coverage-branches=90 --test-coverage-functions=85 test/*.test.js",
     "test:e2e": "playwright test e2e/app.spec.js",
     "test:crawl": "playwright test e2e/crawl.spec.js",
-    "bench": "node perf/bench.js"
+    "bench": "node perf/bench.js",
+    "lint": "eslint ."
   },
   "private": true,
   "homepage": "https://github.com/miglworld/MyTvApp",
@@ -26,6 +27,9 @@
   },
   "author": "miglworld",
   "devDependencies": {
-    "@playwright/test": "1.56.1"
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.56.1",
+    "eslint": "10.15.0",
+    "globals": "17.14.0"
   }
 }
