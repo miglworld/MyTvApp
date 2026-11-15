@@ -62,6 +62,12 @@ function seedScript(options) {
     const opts = JSON.stringify(options || {});
     return `
     (function () {
+        window.__cspViolations = [];
+        document.addEventListener('securitypolicyviolation', function (e) {
+            window.__cspViolations.push(e.violatedDirective + ' blocked ' + (e.blockedURI || 'inline'));
+        });
+    })();
+    (function () {
         var o = ${opts};
         if (!localStorage.getItem('e2e_seeded')) {
             localStorage.setItem('e2e_seeded', '1');
