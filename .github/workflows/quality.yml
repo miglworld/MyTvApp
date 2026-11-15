@@ -1,6 +1,6 @@
 name: Quality
 
-# Every push and pull request: unit and integration tests with coverage limits,
+# Every push and pull request: lint, unit and integration tests with coverage limits,
 # browser tests of the real app on localhost, a performance comparison with the
 # base branch, and security scans. Any failing job blocks the merge once it is a
 # required check on main. The longer runs (DAST, Lighthouse) are nightly, in
@@ -28,8 +28,23 @@ env:
 # pinned Playwright 1.56.1 does not support.
 
 jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: ESLint 10.15.0 (the app script must stay ES5 for older TVs)
+        run: npx eslint .
+
   unit:
     name: unit and integration
+    needs: lint
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

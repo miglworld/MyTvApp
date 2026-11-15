@@ -136,7 +136,7 @@ function tidy(channels) {
 // parts. Throws for anything else.
 function sourceUrl(address) {
     var url;
-    try { url = new URL(String(address)); } catch (e) { throw new Error('not an address: ' + address); }
+    try { url = new URL(String(address)); } catch (e) { throw new Error('not an address: ' + address, { cause: e }); }
     if (url.protocol !== 'https:') throw new Error('not an HTTPS address: ' + address);
     if (ALLOWED_HOSTS.indexOf(url.hostname) === -1) throw new Error('host not allowed: ' + url.hostname);
     if (url.port && url.port !== '443') throw new Error('port not allowed: ' + url.port);

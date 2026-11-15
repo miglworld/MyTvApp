@@ -2,7 +2,7 @@
 // playback start, and the defences against hostile playlist text.
 'use strict';
 const { test, expect } = require('@playwright/test');
-const { seedScript, lockNetwork, press, KEY, watchPage, PLAYLIST_URL } = require('./fixtures');
+const { seedScript, lockNetwork, press, KEY, watchPage } = require('./fixtures');
 
 // Opens the app. Waits for the channel list unless the test expects none.
 async function open(page, options) {

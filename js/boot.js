@@ -63,7 +63,7 @@
     // already served from the network (localhost is allowed for testing).
     var installed = location.protocol.indexOf('http') !== 0 || location.hostname === 'localhost';
 
-    var upd = null;
+    var upd;
     try { upd = JSON.parse(get(UPDATE_KEY) || 'null'); } catch (e) { upd = null; }
 
     if (!upd || !installed) { startBundled(); return; }
