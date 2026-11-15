@@ -2,6 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- Content Security Policy. Scripts and styles only from the app itself:
+     'unsafe-inline' is needed because js/boot.js installs a downloaded update
+     as an inline script and style, and for the error box below. Playlists,
+     logos and streams may come from any host. file: is the installed app's
+     own origin on the TV. No plugins from elsewhere, no <base>, forms or frames. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file: 'unsafe-inline'; worker-src 'self' file: blob:; style-src 'self' file: 'unsafe-inline'; img-src * file: data: blob:; media-src * file: blob:; connect-src * file:; object-src 'self' file:; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <title>MyTvApp</title>
 <link rel="stylesheet" type="text/css" href="css/style.css">
 <!-- Samsung TV Web API (AVPlay). Only resolves inside an installed .wgt; harmless elsewhere. -->

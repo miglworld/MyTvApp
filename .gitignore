@@ -28,3 +28,6 @@ e2e-results.json
 e2e-crawl.json
 lighthouse/
 zap-report.html
+lighthouse/
+.lighthouseci/
+zap-report.json

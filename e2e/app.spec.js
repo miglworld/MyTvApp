@@ -31,6 +31,60 @@ test('boot: the app starts with no uncaught errors, console errors or blocked re
     await expect(page.locator('#liveTitle')).toContainText('All channels');
 });
 
+test('content security policy: the app works without a single violation', async ({ page }) => {
+    await open(page);
+    expect(await page.evaluate(() => !!document.querySelector('meta[http-equiv="Content-Security-Policy"]'))).toBe(true);
+    // Through the screens that load the most: playback, the guide, Settings.
+    await press(page, KEY.OK);
+    await expect(page.locator('#screen-player')).toHaveClass(/active/);
+    await press(page, KEY.BACK);
+    await press(page, KEY.LEFT);
+    await press(page, KEY.LEFT);
+    await page.click('#navGuide');
+    await expect(page.locator('.guide-cell').first()).toBeVisible();
+    await page.click('#navSettings');
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => window.__cspViolations)).toEqual([]);
+});
+
+test('content security policy: a script from another site is refused', async ({ page }) => {
+    await open(page);
+    const loaded = await page.evaluate(() => new Promise((resolve) => {
+        const s = document.createElement('script');
+        s.src = 'https://evil.example/x.js';
+        s.onload = () => resolve('loaded');
+        s.onerror = () => resolve('refused');
+        document.body.appendChild(s);
+    }));
+    expect(loaded).toBe('refused');
+    const violations = await page.evaluate(() => window.__cspViolations);
+    expect(violations.some((v) => /script-src/.test(v) && /evil\.example/.test(v))).toBe(true);
+});
+
+test('content security policy: the browser player can still start a worker and a media source', async ({ page }) => {
+    // hls.js, the fallback player, needs both: a worker made from a blob: address,
+    // and a video whose source is a blob: address for the media source.
+    await open(page);
+    const result = await page.evaluate(() => new Promise((resolve) => {
+        const out = {};
+        try {
+            const url = URL.createObjectURL(new Blob(['postMessage("ok")'], { type: 'text/javascript' }));
+            const w = new Worker(url);
+            w.onmessage = (e) => { out.worker = e.data; finish(); };
+            w.onerror = () => { out.worker = 'refused'; finish(); };
+        } catch (e) { out.worker = 'threw ' + e.name; }
+        const video = document.createElement('video');
+        const ms = new MediaSource();
+        ms.addEventListener('sourceopen', () => { out.mediaSource = 'open'; finish(); });
+        video.addEventListener('error', () => { out.mediaSource = 'refused'; finish(); });
+        video.src = URL.createObjectURL(ms);
+        function finish() { if (out.worker && out.mediaSource) resolve(out); }
+        setTimeout(() => resolve(out), 5000);
+    }));
+    expect(result).toEqual({ worker: 'ok', mediaSource: 'open' });
+    expect(await page.evaluate(() => window.__cspViolations)).toEqual([]);
+});
+
 test('navigation: every top-level menu item shows its screen', async ({ page }) => {
     await open(page);
     // Left opens Live TV's own menu; Left again returns to the main menu.
