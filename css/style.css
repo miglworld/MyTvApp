@@ -5,6 +5,12 @@
    fixed sizes, the padding-bottom aspect-ratio trick, margins, and explicit
    top/right/bottom/left.
    ========================================================================== */
+/* Layout measures shared by several rules. */
+:root {
+	--sidebar-width: 300px;
+	--sidebar-gap: 28px;
+}
+
 * {
 	box-sizing: border-box;
 	margin: 0;
@@ -77,8 +83,8 @@ button {
 .sidebar {
 	position: relative;
 	z-index: 3;
-	width: 300px;
-	margin: 28px 0 28px 28px;
+	width: var(--sidebar-width);
+	margin: var(--sidebar-gap) 0 var(--sidebar-gap) var(--sidebar-gap);
 	align-self: flex-start;
 	border-radius: 38px;
 	display: flex;
@@ -533,7 +539,8 @@ html.avplay-active .favorite-btn {
 .live-scrim {
 	position: absolute;
 	z-index: 0;
-	left: -420px;
+	/* Back over the sidebar's space, to the left edge of the screen. */
+	left: calc(-1 * (var(--sidebar-width) + var(--sidebar-gap)));
 	right: 0;
 	bottom: 0;
 	height: 600px;
