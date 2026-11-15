@@ -10,7 +10,7 @@
     "ChannelDown",
     "MediaPlayPause"
   ],
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "test": "node --test test/*.test.js",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=scripts/build-guide.js --test-coverage-lines=90 --test-coverage-branches=90 --test-coverage-functions=85 test/*.test.js",
