@@ -117,24 +117,44 @@ function tidy(channels) {
     return channels;
 }
 
-// The address to fetch for a configured source: HTTPS, on an allowed host,
-// rebuilt from its parsed parts. Throws for anything else.
-function sourceUrl(text) {
+// The address to fetch for a configured source: HTTPS, on an allowed host and
+// the default port, with no login. Returns the address rebuilt from its parsed
+// parts. Throws for anything else.
+function sourceUrl(address) {
     var url;
-    try { url = new URL(String(text)); } catch (e) { throw new Error('not an address: ' + text); }
-    if (url.protocol !== 'https:') throw new Error('not an HTTPS address: ' + text);
+    try { url = new URL(String(address)); } catch (e) { throw new Error('not an address: ' + address); }
+    if (url.protocol !== 'https:') throw new Error('not an HTTPS address: ' + address);
     if (ALLOWED_HOSTS.indexOf(url.hostname) === -1) throw new Error('host not allowed: ' + url.hostname);
+    if (url.port && url.port !== '443') throw new Error('port not allowed: ' + url.port);
     if (url.username || url.password) throw new Error('address must not carry a login: ' + url.hostname);
     return 'https://' + url.hostname + url.pathname + url.search;
 }
 
-// Plain GET of a public file: no credentials or headers of this job go with it.
-function download(source) {
-    var url = sourceUrl(source);
-    return fetch(url, { redirect: 'follow', credentials: 'omit' }).then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status + ' for ' + url);
-        return res.text();
+var MAX_REDIRECTS = 3;
+
+// Fetches one source and resolves to its text. Redirects are followed by hand,
+// so every address the job reaches, not only the first one, passes sourceUrl.
+// A failure is a rejected promise, never a throw, so main() reports it the same
+// way for playlists and feeds. fetchImpl is injectable for the tests.
+function fetchSource(address, fetchImpl, redirects) {
+    return Promise.resolve().then(function () {
+        var url = sourceUrl(address);
+        return fetchImpl(url, { redirect: 'manual' }).then(function (res) {
+            var status = res.status;
+            var location = res.headers.get('location');
+            if (status >= 300 && status < 400 && location) {
+                if (redirects >= MAX_REDIRECTS) throw new Error('too many redirects for ' + url);
+                return fetchSource(new URL(location, url).href, fetchImpl, redirects + 1);
+            }
+            if (!res.ok) throw new Error('HTTP ' + status + ' for ' + url);
+            return res.text();
+        });
     });
+}
+
+// Node's fetch keeps no cookies and adds no headers of this job's own.
+function download(address) {
+    return fetchSource(address, fetch, 0);
 }
 
 function main() {
@@ -168,7 +188,7 @@ function main() {
     });
 }
 
-module.exports = { sourceUrl: sourceUrl, channelKey: channelKey, playlistKeys: playlistKeys, parseXmltvTime: parseXmltvTime, addProgrammes: addProgrammes, tidy: tidy };
+module.exports = { sourceUrl: sourceUrl, fetchSource: fetchSource, channelKey: channelKey, playlistKeys: playlistKeys, parseXmltvTime: parseXmltvTime, addProgrammes: addProgrammes, tidy: tidy };
 
 if (require.main === module) {
     main().catch(function (err) { console.error('guide not built: ' + err.message); process.exit(1); });
