@@ -41,10 +41,8 @@ jobs:
         run: >
           node --test --experimental-test-coverage
           --test-coverage-include=scripts/build-guide.js
-          --test-coverage-lines=90 --test-coverage-branches=70 --test-coverage-functions=85
+          --test-coverage-lines=90 --test-coverage-branches=90 --test-coverage-functions=85
           test/*.test.js
-      - name: Earlier suites
-        run: node scripts/test.js && node scripts/test-guide.js
 
   e2e:
     name: browser tests
