@@ -69,7 +69,7 @@ All tests run against this checkout on `localhost` or on fixture data. None reac
 |---|---|---|
 | CodeQL (SAST, `security-extended` queries) | `.github/workflows/codeql.yml`, every pull request and weekly | PASS on `main`; no open alerts. |
 | Semgrep 1.99.0, JavaScript rules | `.github/workflows/quality.yml`, `sast` job | UNVERIFIED until its first run in CI. |
-| gitleaks 8.21.2 over the whole history | `quality.yml`, `secrets` job | UNVERIFIED until its first run in CI. GitHub's own secret scanning and push protection are on. |
+| gitleaks 8.21.2 over the whole history | `quality.yml`, `secrets` job | **FAIL: 9 findings**, all in `playlists/index.country.m3u` in commit `b1c51d9`, made by the upstream author before the fork. The file was a copy of iptv-org's public channel list and was removed from the tree in version 1.2.0. The findings are tokens inside third-party stream addresses published by iptv-org (8 matched as generic API keys, 1 as a JWT), not credentials of this project, so there is nothing of ours to revoke. They remain in the history. Not resolved: see "Open decisions". GitHub's own secret scanning and push protection are on. |
 | npm audit | `quality.yml`, `dependencies` job | PASS locally: `found 0 vulnerabilities` (the only dependency is the test tool Playwright). |
 | osv-scanner 1.9.2 on the lockfile | `quality.yml`, `dependencies` job | UNVERIFIED until its first run in CI. |
 | OWASP ZAP baseline 2.16.0 (DAST) | `.github/workflows/nightly.yml`, against the app on `localhost` | UNVERIFIED until its first nightly run. Report only: its findings concern the test server's headers, and the real host's headers are GitHub's. |
@@ -105,6 +105,11 @@ The app script (`js/main.js`) cannot be measured the same way: almost all of it 
 - **GitHub's hosting** (TLS, HTTP/2, caching, headers): outside this repository.
 - **A Content Security Policy.** The page has none. Adding one could block the Samsung player's own script on the TV, so it needs a test on a TV before it ships.
 - **Lint and type checking.** The app is plain ES5 in one file, without a linter or type checker. `node --check` and the rules in `scripts/check.sh` are the current lint.
+
+## Open decisions
+
+1. **Old tokens in the history.** Either list the nine findings by fingerprint in a `.gitleaksignore` file with the reason above, so every other commit and any new token still fails the scan; or rewrite the history to remove the file, which needs a force push to the protected `main` and breaks existing clones. Until one is chosen, the secret scan fails.
+2. **Required checks.** The new jobs are not required on `main` yet; making them required is a repository setting.
 
 ## Defects found and fixed in this branch
 

@@ -24,10 +24,13 @@ concurrency:
 env:
   NODE_VERSION: '22.12.0'
 
+# Runners are pinned to Ubuntu 24.04: "ubuntu-latest" moved to 26.04, which the
+# pinned Playwright 1.56.1 does not support.
+
 jobs:
   unit:
     name: unit and integration
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -46,7 +49,7 @@ jobs:
   e2e:
     name: browser tests
     needs: unit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +81,7 @@ jobs:
   perf-smoke:
     name: performance smoke
     needs: unit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +109,7 @@ jobs:
 
   secrets:
     name: secret scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -120,7 +123,7 @@ jobs:
 
   dependencies:
     name: dependency audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -137,7 +140,7 @@ jobs:
 
   sast:
     name: semgrep
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
