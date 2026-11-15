@@ -30,10 +30,16 @@ var ALLOWED_HOSTS = ['iptv-org.github.io', 'iptv-epg.org'];
 var DESCRIPTION_MAX = 200;
 var PAST_HOURS = 3;   // keep what started a little while ago: it may still be on
 
+// A character reference outside Unicode becomes the replacement character
+// instead of throwing: one bad title must not stop the whole build.
+function codePoint(n) {
+    return n <= 0x10FFFF ? String.fromCodePoint(n) : '\uFFFD';
+}
+
 function decodeXml(s) {
     return String(s)
-        .replace(/&#(\d+);/g, function (m, n) { return String.fromCodePoint(Number(n)); })
-        .replace(/&#x([0-9a-f]+);/gi, function (m, n) { return String.fromCodePoint(parseInt(n, 16)); })
+        .replace(/&#(\d{1,8});/g, function (m, n) { return codePoint(Number(n)); })
+        .replace(/&#x([0-9a-f]{1,8});/gi, function (m, n) { return codePoint(parseInt(n, 16)); })
         .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
         .replace(/&amp;/g, '&');
 }
@@ -43,9 +49,15 @@ function channelKey(tvgId) {
     return String(tvgId || '').split('@')[0].trim().toLowerCase();
 }
 
+// Maps here have no inherited names (no __proto__, constructor...), so a
+// channel called "__proto__" is an ordinary key.
+function has(object, key) {
+    return Object.prototype.hasOwnProperty.call(object, key);
+}
+
 // The channel keys a playlist asks for.
 function playlistKeys(m3u) {
-    var keys = {};
+    var keys = Object.create(null);
     var re = /tvg-id="([^"]*)"/g;
     var m;
     while ((m = re.exec(m3u)) !== null) {
@@ -87,7 +99,7 @@ function addProgrammes(channels, xml, wanted, nowSeconds, hours) {
     var added = 0;
     while ((m = re.exec(xml)) !== null) {
         var key = channelKey(decodeXml(attribute(m[1], 'channel')));
-        if (!wanted[key]) continue;
+        if (!has(wanted, key)) continue;
         var start = parseXmltvTime(attribute(m[1], 'start'));
         var stop = parseXmltvTime(attribute(m[1], 'stop'));
         if (!(stop > start) || stop <= from || start >= until) continue;
@@ -98,7 +110,9 @@ function addProgrammes(channels, xml, wanted, nowSeconds, hours) {
         if (description && description !== title) {
             entry.push(description.length > DESCRIPTION_MAX ? description.slice(0, DESCRIPTION_MAX - 1).trim() + '…' : description);
         }
-        if (!channels[key]) channels[key] = [];
+        if (!has(channels, key)) {
+            Object.defineProperty(channels, key, { value: [], enumerable: true, writable: true, configurable: true });
+        }
         channels[key].push(entry);
         added++;
     }
@@ -161,8 +175,8 @@ function main() {
     var out = process.argv[2] || 'guide.json';
     var hours = config.hours || 48;
     var now = Math.floor(Date.now() / 1000);
-    var wanted = {};
-    var channels = {};
+    var wanted = Object.create(null);
+    var channels = Object.create(null);
 
     return Promise.all(config.playlists.map(download)).then(function (playlists) {
         playlists.forEach(function (m3u) { Object.assign(wanted, playlistKeys(m3u)); });
