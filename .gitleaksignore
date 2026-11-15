@@ -1,0 +1,18 @@
+# Findings gitleaks may skip. Each line is one exact finding (commit:file:rule:line);
+# anything else, including the same strings in any other commit, still fails.
+#
+# These nine are in playlists/index.country.m3u in commit b1c51d9, made by the
+# upstream author before this repository was forked. The file was a copy of
+# iptv-org's public channel list and was removed from the tree in version 1.2.0.
+# The strings are tokens inside third-party stream addresses that iptv-org
+# published, not credentials of this project: there is nothing of ours to revoke.
+# Removing them from the history would need a force push to main.
+b1c51d95bc798978be74cff325adca3a4e2c01e8:playlists/index.country.m3u:generic-api-key:12014
+b1c51d95bc798978be74cff325adca3a4e2c01e8:playlists/index.country.m3u:generic-api-key:12018
+b1c51d95bc798978be74cff325adca3a4e2c01e8:playlists/index.country.m3u:generic-api-key:12020
+b1c51d95bc798978be74cff325adca3a4e2c01e8:playlists/index.country.m3u:generic-api-key:12022
+b1c51d95bc798978be74cff325adca3a4e2c01e8:playlists/index.country.m3u:generic-api-key:12033
+b1c51d95bc798978be74cff325adca3a4e2c01e8:playlists/index.country.m3u:generic-api-key:4444
+b1c51d95bc798978be74cff325adca3a4e2c01e8:playlists/index.country.m3u:generic-api-key:4448
+b1c51d95bc798978be74cff325adca3a4e2c01e8:playlists/index.country.m3u:generic-api-key:4470
+b1c51d95bc798978be74cff325adca3a4e2c01e8:playlists/index.country.m3u:jwt:9563
