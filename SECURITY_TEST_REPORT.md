@@ -68,10 +68,10 @@ All tests run against this checkout on `localhost` or on fixture data. None reac
 | Scanner | Where | Status |
 |---|---|---|
 | CodeQL (SAST, `security-extended` queries) | `.github/workflows/codeql.yml`, every pull request and weekly | PASS on `main`; no open alerts. |
-| Semgrep 1.99.0, JavaScript rules | `.github/workflows/quality.yml`, `sast` job | UNVERIFIED until its first run in CI. |
+| Semgrep 1.99.0, JavaScript rules | `.github/workflows/quality.yml`, `sast` job | PASS in CI: "Ran 68 rules on 11 files: 0 findings." The bundled hls.js is excluded. |
 | gitleaks 8.21.2 over the whole history | `quality.yml`, `secrets` job | **FAIL: 9 findings**, all in `playlists/index.country.m3u` in commit `b1c51d9`, made by the upstream author before the fork. The file was a copy of iptv-org's public channel list and was removed from the tree in version 1.2.0. The findings are tokens inside third-party stream addresses published by iptv-org (8 matched as generic API keys, 1 as a JWT), not credentials of this project, so there is nothing of ours to revoke. They remain in the history. Not resolved: see "Open decisions". GitHub's own secret scanning and push protection are on. |
-| npm audit | `quality.yml`, `dependencies` job | PASS locally: `found 0 vulnerabilities` (the only dependency is the test tool Playwright). |
-| osv-scanner 1.9.2 on the lockfile | `quality.yml`, `dependencies` job | UNVERIFIED until its first run in CI. |
+| npm audit | `quality.yml`, `dependencies` job | PASS locally and in CI: `found 0 vulnerabilities` (the only dependency is the test tool Playwright). |
+| osv-scanner 1.9.2 on the lockfile | `quality.yml`, `dependencies` job | PASS in CI: 4 packages scanned, "No issues found". |
 | OWASP ZAP baseline 2.16.0 (DAST) | `.github/workflows/nightly.yml`, against the app on `localhost` | UNVERIFIED until its first nightly run. Report only: its findings concern the test server's headers, and the real host's headers are GitHub's. |
 
 ## Tests and coverage
@@ -94,7 +94,7 @@ The app script (`js/main.js`) cannot be measured the same way: almost all of it 
 | Measure | What it does | Result |
 |---|---|---|
 | `perf/bench.js` | Median of 7 runs: reading a 13,000-channel playlist, and reading a guide feed with 33,600 programmes | On this Mac: 11.6 ms and 48.7 ms; `main` measured 12.2 ms and 52.9 ms. |
-| Regression check | `perf/compare.js` runs the same timing on the pull request and its base, on the same CI machine, and fails above +25% | Passes locally (−4.9% and −7.9%). |
+| Regression check | `perf/compare.js` runs the same timing on the pull request and its base, on the same CI machine, and fails above +25% | Passes locally (−4.9% and −7.9%) and in CI (playlist 26.0 → 23.6 ms, −9.2%; guide feed 122.7 → 119.0 ms, −3.0%). |
 | Load tests (k6, Artillery) | — | NOT APPLICABLE: there is no server of ours to load. |
 | Lighthouse | `nightly.yml`, three runs of the app page | Measures only. Limits for LCP and CLS need agreed targets. Lighthouse measures in a lab, so INP is not available; Total Blocking Time stands in for it. |
 
