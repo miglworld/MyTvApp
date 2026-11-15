@@ -11,6 +11,9 @@
     "MediaPlayPause"
   ],
   "license": "UNLICENSED",
+  "scripts": {
+    "test": "node --test test/*.test.js && node scripts/test-guide.js && node scripts/test.js"
+  },
   "private": true,
   "homepage": "https://github.com/miglworld/MyTvApp",
   "repository": {

@@ -1243,7 +1243,7 @@
             if (!line) continue;
 
             if (line.indexOf('#EXTINF') === 0) {
-                var attrs = {};
+                var attrs = Object.create(null);
                 var m;
                 attrRegex.lastIndex = 0;
                 while ((m = attrRegex.exec(line)) !== null) attrs[m[1].toLowerCase()] = m[2];
@@ -1289,10 +1289,11 @@
     // playlists stay visually separate, per playlist, on the Categories screen.
     function rebuildCategories() {
         var order = [];
-        var byPlaylist = {};
+        // Null-prototype maps: a group named "__proto__" is an ordinary group.
+        var byPlaylist = Object.create(null);
         state.channels.forEach(function (ch) {
             var pid = ch.playlistId || '';
-            if (!byPlaylist[pid]) { byPlaylist[pid] = {}; order.push(pid); }
+            if (!byPlaylist[pid]) { byPlaylist[pid] = Object.create(null); order.push(pid); }
             var key = ch.group || 'Other';
             if (!byPlaylist[pid][key]) {
                 byPlaylist[pid][key] = { name: key, code: ch.tvgCountry || '', channels: [], playlistId: pid, playlistName: ch.playlistName || '' };
