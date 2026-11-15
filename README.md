@@ -279,4 +279,4 @@ Playlists are downloaded from their address the first time and then kept on the 
 - Preset playlists come from [iptv-org](https://github.com/iptv-org/iptv); the programme guide is built from [iptv-epg.org](https://iptv-epg.org/).
 - App icon: "Live TV" from the Noun Project.
 
-The original project has no license file, so this repository does not carry an open-source license either.
+Copyright (c) 2026 miglworld. All rights reserved. The code in this repository is covered by the [LICENSE](LICENSE) file. The bundled hls.js is Apache 2.0 licensed (`lib/hls.LICENSE`) and keeps its own terms.
