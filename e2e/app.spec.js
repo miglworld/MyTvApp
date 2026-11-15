@@ -104,13 +104,57 @@ test('navigation: every top-level menu item shows its screen', async ({ page }) 
 test('settings: every section opens and shows its rows', async ({ page }) => {
     await open(page);
     await page.click('#navSettings');
-    const sections = ['Playlists', 'Playback', 'Channels', 'Updates', 'About'];
+    const sections = ['Playlists', 'Playback', 'Channels', 'Updates', 'About', 'Report a problem'];
     for (const name of sections) {
         await page.locator('.settings-cat', { hasText: name }).click();
         await expect(page.locator('#settingsSectionTitle')).toHaveText(name);
         // Every section has at least one row: a switch, a value, an action or a fact.
         expect(await page.locator('#settingsRows > *').count(), name).toBeGreaterThan(0);
     }
+});
+
+test('report a problem: the drawn QR code opens a filled-in GitHub issue, with logins cut out', async ({ page }) => {
+    await page.addInitScript(() => {
+        localStorage.setItem('iptv_log', JSON.stringify([
+            '20:00:01 start',
+            '20:00:02 playlist failed: http://me:secret@iptv.example/get.php?username=me&password=secret'
+        ]));
+    });
+    await open(page);
+    await page.click('#navSettings');
+    await page.locator('.settings-cat', { hasText: 'Report a problem' }).click();
+    await expect(page.locator('.report-code svg')).toBeVisible();
+
+    // What the screen shows has no login in it.
+    const shown = await page.locator('#settingsRows').innerText();
+    expect(shown).toContain('iptv.example/…');
+    expect(shown).not.toContain('secret');
+
+    // Draw the code the way the page shows it and read it with jsQR.
+    const image = await page.evaluate(() => new Promise((resolve, reject) => {
+        const svg = new XMLSerializer().serializeToString(document.querySelector('.report-code svg'));
+        const img = new Image();
+        img.onload = () => {
+            const side = 600;
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = side;
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, 0, 0, side, side);
+            resolve({ side, data: Array.from(ctx.getImageData(0, 0, side, side).data) });
+        };
+        img.onerror = () => reject(new Error('the code did not draw'));
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }));
+    const found = require('jsqr')(Uint8ClampedArray.from(image.data), image.side, image.side);
+    expect(found, 'the code reads').toBeTruthy();
+    const url = new URL(found.data);
+    expect(url.origin + url.pathname).toBe('https://github.com/miglworld/MyTvApp/issues/new');
+    const body = url.searchParams.get('body');
+    expect(body).toContain('- Version: ');
+    expect(body).toContain('20:00:01 start');
+    expect(found.data).not.toContain('secret');
+    expect(await page.evaluate(() => window.__cspViolations)).toEqual([]);
 });
 
 test('settings: a switch changes its stored value and its drawn state', async ({ page }) => {
