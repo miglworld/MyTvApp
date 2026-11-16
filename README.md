@@ -77,6 +77,7 @@ Five sections on the left; the rows of the chosen section on the right. Each row
 | **Channels** | How channels marked "Geo-blocked" or "Not 24/7" are shown (dimmed, hidden, as normal); forget channels marked as not playing; counts. |
 | **Updates** | Automatic updates, check now, developer mode. |
 | **About** | Version, where the app runs from, the TV's software, when the guide was built, the last update check, the last error, and the diagnostics list. |
+| **Report a problem** | A QR code: scan it with your phone to open a new GitHub issue for MyTvApp, already filled in with the version, the TV's software and the diagnostics list. Web addresses are cut to their server name first, so playlist logins stay on the TV. |
 
 ![Settings: the Playback section, with the explanation of the highlighted row](docs/images/settings-playback.jpg)
 
