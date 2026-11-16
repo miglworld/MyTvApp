@@ -39,7 +39,7 @@
     // ==========================================================================
     // Config / constants
     // ==========================================================================
-    var APP_VERSION = '0.12.6';
+    var APP_VERSION = '0.12.7';
     var PLAYLISTS_KEY = 'iptv_playlists';
     var ACTIVE_PLAYLISTS_KEY = 'iptv_active_playlist_id';
     var FAVORITES_KEY = 'iptv_favorites';
@@ -476,8 +476,9 @@
     }
 
     function switchToScreen(id) {
-        // The picture only runs on the Live TV screen and full screen.
-        if (id !== 'screen-live') stopPlayback();
+        // The picture keeps running on Live TV, on Settings (like the guide and
+        // Add Playlist, which open without stopping it) and in full screen.
+        if (id !== 'screen-live' && id !== 'screen-settings') stopPlayback();
         showScreen(id);
         markMenu();
 
