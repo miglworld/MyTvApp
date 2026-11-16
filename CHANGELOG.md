@@ -2,6 +2,9 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.12.7 (dev branch, not released yet)
+- Settings: the channel keeps playing while Settings is open, as it does behind the TV Guide, instead of stopping.
+
 ## v0.12.6 (dev branch, not released yet)
 - Updates: while the app runs, it checks GitHub for a newer version every two minutes (when automatic updates are on). A downloaded update shows the corner notice ("Update now" or "Later") as soon as it arrives, not only at the next start. Nothing is checked again while a downloaded update is waiting.
 
