@@ -39,7 +39,7 @@
     // ==========================================================================
     // Config / constants
     // ==========================================================================
-    var APP_VERSION = '0.12.5';
+    var APP_VERSION = '0.12.6';
     var PLAYLISTS_KEY = 'iptv_playlists';
     var ACTIVE_PLAYLISTS_KEY = 'iptv_active_playlist_id';
     var FAVORITES_KEY = 'iptv_favorites';
@@ -84,6 +84,7 @@
     var UPDATE_URL_KEY = 'mytvapp_update_url';   // testing only: another address to update from
     var AUTO_UPDATE_KEY = 'iptv_auto_update';
     var UPDATE_CHECK_DELAY_MS = 3000;
+    var UPDATE_RECHECK_MS = 2 * 60 * 1000;   // while the app runs: look for a newer version this often
 
     // Playlist memory: stored copies are used at the start and downloaded
     // again in the background once they are older than this.
@@ -266,6 +267,7 @@
     // Automatic updates (Settings switch, on by default).
     var autoUpdate = readStored(AUTO_UPDATE_KEY) !== '0';
     var updateReady = '';   // version downloaded and waiting for the next start
+    var updateChecking = false;   // a check is running: the next one waits for it
     // Developer mode (Settings switch, off by default): take test versions
     // from the dev branch. There the TV follows the branch exactly, to
     // whatever version it holds, not only to higher ones.
@@ -2415,8 +2417,16 @@
     }
 
     // manual: started from Settings, so it reports back and may restart at once.
-    function checkForUpdate(manual) {
+    // periodic: the repeat check while the app runs. It stays quiet when there
+    // is nothing new, and does nothing while a downloaded update is waiting.
+    function checkForUpdate(manual, periodic) {
         if (!updatesPossible() || (!autoUpdate && !manual)) return;
+        if (periodic && updateReady) return;
+        if (updateChecking) {
+            if (manual) showToast('Already checking for updates');
+            return;
+        }
+        updateChecking = true;
         var branch = developerMode ? 'dev' : 'main';
         var channel = developerMode ? 'dev branch' : 'main';
         var version = '';
@@ -2450,7 +2460,7 @@
             }
             if (!wanted) {
                 state.updateCheck = guideTime(nowMinute()) + ' \u00b7 up to date';
-                logEvent('update check (' + channel + '): ' + APP_VERSION + ' is current');
+                if (!periodic) logEvent('update check (' + channel + '): ' + APP_VERSION + ' is current');
                 if (manual) showToast('MyTvApp ' + APP_VERSION + ' is the current version');
                 return null;
             }
@@ -2495,6 +2505,8 @@
             state.updateCheck = guideTime(nowMinute()) + ' \u00b7 failed';
             logEvent('update check failed (' + channel + '): ' + ((err && err.message) || err));
             if (manual) showToast('Update check failed: ' + ((err && err.message) || err));
+        }).then(function () {
+            updateChecking = false;
         });
     }
 
@@ -3504,5 +3516,6 @@
     // one-press iptv-org presets are right there.
     refreshActiveChannels({ screen: state.playlists.length ? 'screen-live' : 'screen-settings', after: restoreLastChannel });
     setTimeout(checkForUpdate, UPDATE_CHECK_DELAY_MS);
+    setInterval(function () { checkForUpdate(false, true); }, UPDATE_RECHECK_MS);
     setTimeout(loadGuide, 1500);
 });
