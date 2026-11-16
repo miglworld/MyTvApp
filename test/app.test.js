@@ -1,17 +1,11 @@
 // Tests for the parts of js/main.js that do not need a page.
-// Run with: node scripts/test.js
+// Run with: npm test
 'use strict';
 var assert = require('assert');
 var path = require('path');
 var app = require(path.join(__dirname, '..', 'js', 'main.js'));
 
-var passed = 0;
-function test(name, fn) {
-    try { fn(); passed++; } catch (e) {
-        console.error('FAIL: ' + name + '\n  ' + e.message);
-        process.exitCode = 1;
-    }
-}
+var test = require('node:test');
 
 test('main.js hands out its functions under Node', function () {
     assert.strictEqual(typeof app.parseM3U, 'function');
@@ -178,4 +172,3 @@ test('version comparison is by number, not by text', function () {
     assert.strictEqual(app.versionNewer('', '0.9.0'), false);
 });
 
-if (!process.exitCode) console.log(passed + ' tests passed');

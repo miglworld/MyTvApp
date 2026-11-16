@@ -30,10 +30,16 @@ var ALLOWED_HOSTS = ['iptv-org.github.io', 'iptv-epg.org'];
 var DESCRIPTION_MAX = 200;
 var PAST_HOURS = 3;   // keep what started a little while ago: it may still be on
 
+// A character reference outside Unicode becomes the replacement character
+// instead of throwing: one bad title must not stop the whole build.
+function codePoint(n) {
+    return n <= 0x10FFFF ? String.fromCodePoint(n) : '\uFFFD';
+}
+
 function decodeXml(s) {
     return String(s)
-        .replace(/&#(\d+);/g, function (m, n) { return String.fromCodePoint(Number(n)); })
-        .replace(/&#x([0-9a-f]+);/gi, function (m, n) { return String.fromCodePoint(parseInt(n, 16)); })
+        .replace(/&#(\d{1,8});/g, function (m, n) { return codePoint(Number(n)); })
+        .replace(/&#x([0-9a-f]{1,8});/gi, function (m, n) { return codePoint(parseInt(n, 16)); })
         .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
         .replace(/&amp;/g, '&');
 }
@@ -43,9 +49,15 @@ function channelKey(tvgId) {
     return String(tvgId || '').split('@')[0].trim().toLowerCase();
 }
 
+// Maps here have no inherited names (no __proto__, constructor...), so a
+// channel called "__proto__" is an ordinary key.
+function has(object, key) {
+    return Object.prototype.hasOwnProperty.call(object, key);
+}
+
 // The channel keys a playlist asks for.
 function playlistKeys(m3u) {
-    var keys = {};
+    var keys = Object.create(null);
     var re = /tvg-id="([^"]*)"/g;
     var m;
     while ((m = re.exec(m3u)) !== null) {
@@ -87,7 +99,7 @@ function addProgrammes(channels, xml, wanted, nowSeconds, hours) {
     var added = 0;
     while ((m = re.exec(xml)) !== null) {
         var key = channelKey(decodeXml(attribute(m[1], 'channel')));
-        if (!wanted[key]) continue;
+        if (!has(wanted, key)) continue;
         var start = parseXmltvTime(attribute(m[1], 'start'));
         var stop = parseXmltvTime(attribute(m[1], 'stop'));
         if (!(stop > start) || stop <= from || start >= until) continue;
@@ -98,7 +110,9 @@ function addProgrammes(channels, xml, wanted, nowSeconds, hours) {
         if (description && description !== title) {
             entry.push(description.length > DESCRIPTION_MAX ? description.slice(0, DESCRIPTION_MAX - 1).trim() + '…' : description);
         }
-        if (!channels[key]) channels[key] = [];
+        if (!has(channels, key)) {
+            Object.defineProperty(channels, key, { value: [], enumerable: true, writable: true, configurable: true });
+        }
         channels[key].push(entry);
         added++;
     }
@@ -122,7 +136,7 @@ function tidy(channels) {
 // parts. Throws for anything else.
 function sourceUrl(address) {
     var url;
-    try { url = new URL(String(address)); } catch (e) { throw new Error('not an address: ' + address); }
+    try { url = new URL(String(address)); } catch (e) { throw new Error('not an address: ' + address, { cause: e }); }
     if (url.protocol !== 'https:') throw new Error('not an HTTPS address: ' + address);
     if (ALLOWED_HOSTS.indexOf(url.hostname) === -1) throw new Error('host not allowed: ' + url.hostname);
     if (url.port && url.port !== '443') throw new Error('port not allowed: ' + url.port);
@@ -152,43 +166,48 @@ function fetchSource(address, fetchImpl, redirects) {
     });
 }
 
-// Node's fetch keeps no cookies and adds no headers of this job's own.
-function download(address) {
-    return fetchSource(address, fetch, 0);
-}
-
-function main() {
-    var out = process.argv[2] || 'guide.json';
+// Builds the guide in memory from the configured playlists and feeds. fetchImpl
+// and now are parameters so tests can run the whole build on fixtures, with no
+// network. Rejects if nothing was found: the published guide then stays as it is.
+function buildGuide(config, fetchImpl, now, log) {
     var hours = config.hours || 48;
-    var now = Math.floor(Date.now() / 1000);
-    var wanted = {};
-    var channels = {};
+    var wanted = Object.create(null);
+    var channels = Object.create(null);
+    log = log || function () {};
 
-    return Promise.all(config.playlists.map(download)).then(function (playlists) {
+    return Promise.all(config.playlists.map(function (address) {
+        return fetchSource(address, fetchImpl, 0);
+    })).then(function (playlists) {
         playlists.forEach(function (m3u) { Object.assign(wanted, playlistKeys(m3u)); });
-        console.log('channels in the playlists: ' + Object.keys(wanted).length);
+        log('channels in the playlists: ' + Object.keys(wanted).length);
         // One feed after another: each is large.
-        return config.feeds.reduce(function (chain, url) {
-            return chain.then(function () { return download(url); }).then(function (xml) {
+        return config.feeds.reduce(function (chain, address) {
+            return chain.then(function () { return fetchSource(address, fetchImpl, 0); }).then(function (xml) {
                 var added = addProgrammes(channels, xml, wanted, now, hours);
-                console.log(url + ': ' + (xml.length / 1e6).toFixed(1) + ' MB, ' + added + ' programmes kept');
+                log(address + ': ' + (xml.length / 1e6).toFixed(1) + ' MB, ' + added + ' programmes kept');
             });
         }, Promise.resolve());
     }).then(function () {
         tidy(channels);
         var total = Object.keys(channels).reduce(function (n, k) { return n + channels[k].length; }, 0);
-        // An empty guide means a feed is broken or has changed: fail, so the
-        // guide that is already published stays as it is.
         if (!total) throw new Error('no programmes found for any channel');
-        var json = JSON.stringify({ generated: now, hours: hours, channels: channels });
+        return { hours: hours, channels: channels, total: total };
+    });
+}
+
+function main() {
+    var out = process.argv[2] || 'guide.json';
+    var now = Math.floor(Date.now() / 1000);
+    return buildGuide(config, fetch, now, console.log).then(function (built) {
+        var json = JSON.stringify({ generated: now, hours: built.hours, channels: built.channels });
         fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
         fs.writeFileSync(out, json);
-        console.log('wrote ' + out + ': ' + Object.keys(channels).length + ' channels, ' + total + ' programmes, ' +
+        console.log('wrote ' + out + ': ' + Object.keys(built.channels).length + ' channels, ' + built.total + ' programmes, ' +
             Math.round(Buffer.byteLength(json) / 1024) + ' KB');
     });
 }
 
-module.exports = { sourceUrl: sourceUrl, fetchSource: fetchSource, channelKey: channelKey, playlistKeys: playlistKeys, parseXmltvTime: parseXmltvTime, addProgrammes: addProgrammes, tidy: tidy };
+module.exports = { buildGuide: buildGuide, sourceUrl: sourceUrl, fetchSource: fetchSource, channelKey: channelKey, playlistKeys: playlistKeys, parseXmltvTime: parseXmltvTime, addProgrammes: addProgrammes, tidy: tidy };
 
 if (require.main === module) {
     main().catch(function (err) { console.error('guide not built: ' + err.message); process.exit(1); });

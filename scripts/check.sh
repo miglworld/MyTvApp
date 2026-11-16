@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 fail() { echo "CHECK FAILED: $1" >&2; exit 1; }
 
 # 1. Every script parses.
-for f in js/main.js js/boot.js scripts/test.js scripts/build-guide.js scripts/test-guide.js; do
+for f in js/main.js js/boot.js scripts/build-guide.js test/*.test.js; do
 	node --check "$f" || fail "$f does not parse"
 done
 
@@ -53,9 +53,19 @@ grep -q "location.hostname === 'localhost'" js/main.js || fail "the update addre
 sum=$( (shasum -a 256 lib/hls.min.js 2>/dev/null || sha256sum lib/hls.min.js) | cut -d' ' -f1)
 [ "$sum" = "72b87a6e58db623feca73ab370970c1126ec06eb3dcd0a67fd14b47b6340b820" ] || fail "lib/hls.min.js is not the official hls.js 1.6.19 build"
 
+# The Content Security Policy is in the page, before any script, and keeps its
+# restrictions.
+csp=$(sed -n 's/.*http-equiv="Content-Security-Policy" content="\([^"]*\)".*/\1/p' index.html | head -1)
+[ -n "$csp" ] || fail "index.html has no Content-Security-Policy meta tag"
+for rule in "script-src 'self' file: 'unsafe-inline';" "object-src 'self' file:;" "base-uri 'none'" "form-action 'none'" "frame-src 'none'"; do
+	case "$csp" in *"$rule"*) ;; *) fail "Content-Security-Policy lacks: $rule" ;; esac
+done
+first_script=$(grep -n '<script' index.html | head -1 | cut -d: -f1)
+csp_line=$(grep -n 'Content-Security-Policy' index.html | grep 'http-equiv' | head -1 | cut -d: -f1)
+[ "$csp_line" -lt "$first_script" ] || fail "the Content-Security-Policy must come before the first script"
+
 # 5. Tests.
-node scripts/test.js || fail "tests"
-node scripts/test-guide.js || fail "guide tests"
+node --test test/*.test.js >/dev/null || fail "tests (run npm test for details)"
 
 # 6. In a pull request: app files changed => the version must be higher than on the base branch.
 if [ -n "$BASE_REF" ]; then
