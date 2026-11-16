@@ -1,6 +1,6 @@
 {
   "name": "mytvapp",
-  "version": "0.12.2",
+  "version": "0.12.3",
   "description": "IPTV player for Samsung TVs: playlists, favorites, channel list, number zapping",
   "packageType": "app",
   "appName": "MyTvApp",
@@ -11,11 +11,25 @@
     "MediaPlayPause"
   ],
   "license": "SEE LICENSE IN LICENSE",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=scripts/build-guide.js --test-coverage-lines=90 --test-coverage-branches=90 --test-coverage-functions=85 test/*.test.js",
+    "test:e2e": "playwright test e2e/app.spec.js",
+    "test:crawl": "playwright test e2e/crawl.spec.js",
+    "bench": "node perf/bench.js",
+    "lint": "eslint ."
+  },
   "private": true,
   "homepage": "https://github.com/miglworld/MyTvApp",
   "repository": {
     "type": "git",
     "url": "https://github.com/miglworld/MyTvApp.git"
   },
-  "author": "miglworld"
+  "author": "miglworld",
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.56.1",
+    "eslint": "10.15.0",
+    "globals": "17.14.0"
+  }
 }

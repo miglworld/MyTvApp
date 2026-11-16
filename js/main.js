@@ -1,3 +1,17 @@
+// MyTvApp: the whole app, in one file because the self-update downloads exactly
+// three files (index.html, css/style.css, this script).
+//
+// Contents, in file order:
+//   Settings and constants        State
+//   Remote keys, focus manager     Messages, dialogs and screens
+//   Side menu                      Programme guide: now and next; TV Guide screen
+//   Live TV screen                 Playlists: reading, storing, downloading
+//   Favorites                      Settings screen
+//   Self-update                    Add or edit a playlist
+//   Playback: preview, full screen and the three players
+//   Channel list over the video, number keys
+//   Back key, exit, key handling   Start-up
+//
 // Runs as soon as it is loaded: this script is the last element of <body>, so
 // the whole page already exists. It must not wait for DOMContentLoaded: when
 // js/boot.js starts a downloaded copy of this script, that event is long past.
@@ -11,7 +25,7 @@
 })(function () {
     'use strict';
 
-    // Under Node (scripts/test.js) there is no page: hand out the functions
+    // Under Node (the tests in test/) there is no page: hand out the functions
     // that do not need one and stop here.
     if (typeof document === 'undefined') {
         if (typeof module !== 'undefined') module.exports = {
@@ -24,7 +38,7 @@
     // ==========================================================================
     // Config / constants
     // ==========================================================================
-    var APP_VERSION = '0.12.2';
+    var APP_VERSION = '0.12.3';
     var PLAYLISTS_KEY = 'iptv_playlists';
     var ACTIVE_PLAYLISTS_KEY = 'iptv_active_playlist_id';
     var FAVORITES_KEY = 'iptv_favorites';
@@ -39,9 +53,8 @@
     var REOPEN_PENDING_KEY = 'iptv_reopen_pending';
     var LOG_KEY = 'iptv_log';
 
-    // Self-update: where the current app is published (GitHub Pages, served
-    // from the repo's main branch) and where a downloaded copy is kept. The
-    // keys are shared with js/boot.js, which starts a downloaded copy.
+    // Self-update: where updates come from and where a downloaded copy is
+    // kept. The storage keys are shared with js/boot.js, which starts it.
     // An update is one exact commit of the repository: the app first asks
     // GitHub which commit a branch points at, then downloads every file from
     // that commit. (Fetching the files by branch name does not work: GitHub
@@ -171,30 +184,41 @@
 
     var editingPlaylistId = null;
 
+    // The TV's storage can be full, switched off or hold broken values:
+    // reading and writing it never throws. Each returns or stores one value.
+    function readStored(key) {
+        try { return localStorage.getItem(key); } catch (e) { return null; }
+    }
+    function readStoredJson(key, fallback) {
+        try { return JSON.parse(localStorage.getItem(key) || 'null') || fallback; } catch (e) { return fallback; }
+    }
+    function writeStored(key, value) {
+        try { localStorage.setItem(key, value); } catch (e) { /* non-fatal: the setting is kept until the app closes */ }
+    }
+    function removeStored(key) {
+        removeStored(key);
+    }
+
     // Optional Samsung player settings (Settings screen). Off by default: the
     // plain player is the configuration known to show a picture on every TV.
-    var pictureTuning = false;
-    try { pictureTuning = localStorage.getItem(PICTURE_TUNING_KEY) === '1'; } catch (e) { pictureTuning = false; }
+    var pictureTuning = readStored(PICTURE_TUNING_KEY) === '1';
 
     // Faster channel start (Settings switch, on by default): the Samsung
     // player shows the picture after buffering 2 seconds instead of its own,
     // longer default.
-    var fastStart = true;
-    try { fastStart = localStorage.getItem(FAST_START_KEY) !== '0'; } catch (e) { fastStart = true; }
+    var fastStart = readStored(FAST_START_KEY) !== '0';
     var fastStartFailureLogged = false;
 
     // Some playlists give a channel the browser identity ("user agent") its
     // server expects from a player. Settings switch, on by default: the
     // Samsung player announces itself with it for that channel.
-    var sendIdentity = true;
-    try { sendIdentity = localStorage.getItem(SEND_IDENTITY_KEY) !== '0'; } catch (e) { sendIdentity = true; }
+    var sendIdentity = readStored(SEND_IDENTITY_KEY) !== '0';
     var identityFailureLogged = false;
 
     // Channels a playlist marks as "[Geo-blocked]" or "[Not 24/7]" often do
     // not play. Settings switch: 'dim' (default) shows them darker, 'hide'
     // leaves them out, 'show' treats them like any other.
-    var taggedMode = 'dim';
-    try { taggedMode = localStorage.getItem(TAGGED_MODE_KEY) || 'dim'; } catch (e) { taggedMode = 'dim'; }
+    var taggedMode = readStored(TAGGED_MODE_KEY) || 'dim';
     if (taggedMode !== 'hide' && taggedMode !== 'show') taggedMode = 'dim';
 
     function isTagged(ch) {
@@ -211,7 +235,7 @@
     } catch (e) { failedChannels = {}; failedOrder = []; }
 
     function saveFailed() {
-        try { localStorage.setItem(FAILED_KEY, JSON.stringify(failedOrder)); } catch (e) { /* non-fatal */ }
+        writeStored(FAILED_KEY, JSON.stringify(failedOrder));
     }
 
     function markFailed(ch, failed) {
@@ -231,19 +255,15 @@
     // Reopen the last watched channel when the app starts. Off by default:
     // the app then always starts on its own screens, so a channel or player
     // problem can never look like an app that does not start.
-    var reopenLast = false;
-    try { reopenLast = localStorage.getItem(REOPEN_LAST_KEY) === '1'; } catch (e) { reopenLast = false; }
+    var reopenLast = readStored(REOPEN_LAST_KEY) === '1';
 
     // Automatic updates (Settings switch, on by default).
-    var autoUpdate = true;
-    try { autoUpdate = localStorage.getItem(AUTO_UPDATE_KEY) !== '0'; } catch (e) { autoUpdate = true; }
+    var autoUpdate = readStored(AUTO_UPDATE_KEY) !== '0';
     var updateReady = '';   // version downloaded and waiting for the next start
     // Developer mode (Settings switch, off by default): take test versions
     // from the dev branch. There the TV follows the branch exactly, to
     // whatever version it holds, not only to higher ones.
-    var developerMode = false;
-    try { developerMode = localStorage.getItem(DEVELOPER_MODE_KEY) === '1'; } catch (e) { developerMode = false; }
-    var bootTime = Date.now();
+    var developerMode = readStored(DEVELOPER_MODE_KEY) === '1';
 
     // Diagnostics: a TV has no console, so the last few events are kept in
     // storage and listed at the bottom of Settings. They survive a restart,
@@ -251,7 +271,7 @@
     var logLines = null;   // read from storage once (js/boot.js may have added lines before this script)
     function readLog() {
         if (!logLines) {
-            try { logLines = JSON.parse(localStorage.getItem(LOG_KEY) || '[]') || []; } catch (e) { logLines = []; }
+            logLines = readStoredJson(LOG_KEY, []);
         }
         return logLines;
     }
@@ -261,7 +281,7 @@
         var lines = readLog();
         lines.push(two(d.getHours()) + ':' + two(d.getMinutes()) + ':' + two(d.getSeconds()) + ' ' + String(msg).slice(0, 160));
         if (lines.length > LOG_LINES) lines.splice(0, lines.length - LOG_LINES);
-        try { localStorage.setItem(LOG_KEY, JSON.stringify(lines)); } catch (e) { /* non-fatal */ }
+        writeStored(LOG_KEY, JSON.stringify(lines));
     }
     // Script errors go to the log as well as the on-screen box.
     if (window.MYTVAPP_ERROR && !window.MYTVAPP_ERROR.logged) {
@@ -269,7 +289,7 @@
         window.MYTVAPP_ERROR = function (text) {
             logEvent('ERROR ' + text);
             // Kept on its own as well: the list above is short and moves on.
-            try { localStorage.setItem(LAST_ERROR_KEY, new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC \u00b7 ' + APP_VERSION + ' \u00b7 ' + String(text).slice(0, 200)); } catch (e) { /* non-fatal */ }
+            writeStored(LAST_ERROR_KEY, new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC \u00b7 ' + APP_VERSION + ' \u00b7 ' + String(text).slice(0, 200));
             showError(text);
         };
         window.MYTVAPP_ERROR.logged = true;
@@ -466,9 +486,9 @@
     }
 
     // ==========================================================================
-    // Side menu: Live TV (every channel), Favorites, one entry per category of
-    // the active playlists, and Settings. Moving through it changes the channel
-    // list at once; OK or Right goes into the list.
+    // Side menu: Live TV, TV Guide, Favorites and Settings. Live TV opens its
+    // own menu in the same place (All channels, then the categories); moving
+    // through it changes the channel list at once. OK or Right goes into the list.
     // ==========================================================================
     function setMenuMode(mode) {
         state.menuMode = mode;
@@ -744,10 +764,7 @@
                 } catch (e) { /* unusable copy: download */ }
             }
             if (fresh) return;
-            return fetchWithTimeout(GUIDE_URL).then(function (res) {
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                return res.text();
-            }).then(function (text) {
+            return fetchText(GUIDE_URL).then(function (text) {
                 if (text.length > GUIDE_MAX_CHARS) throw new Error('guide is too large');
                 var n = useGuide(text);
                 cachePut(GUIDE_ENTRY, text);
@@ -1243,7 +1260,7 @@
             if (!line) continue;
 
             if (line.indexOf('#EXTINF') === 0) {
-                var attrs = {};
+                var attrs = Object.create(null);
                 var m;
                 attrRegex.lastIndex = 0;
                 while ((m = attrRegex.exec(line)) !== null) attrs[m[1].toLowerCase()] = m[2];
@@ -1289,10 +1306,11 @@
     // playlists stay visually separate, per playlist, on the Categories screen.
     function rebuildCategories() {
         var order = [];
-        var byPlaylist = {};
+        // Null-prototype maps: a group named "__proto__" is an ordinary group.
+        var byPlaylist = Object.create(null);
         state.channels.forEach(function (ch) {
             var pid = ch.playlistId || '';
-            if (!byPlaylist[pid]) { byPlaylist[pid] = {}; order.push(pid); }
+            if (!byPlaylist[pid]) { byPlaylist[pid] = Object.create(null); order.push(pid); }
             var key = ch.group || 'Other';
             if (!byPlaylist[pid][key]) {
                 byPlaylist[pid][key] = { name: key, code: ch.tvgCountry || '', channels: [], playlistId: pid, playlistName: ch.playlistName || '' };
@@ -1308,13 +1326,11 @@
     }
 
     // ==========================================================================
-    // Playlists (multiple, persisted; add/edit/delete via Settings). The
-    // built-in default is the real iptv-org country-indexed catalog, not a
-    // local test stub.
+    // Playlists: several can be on at once. They are added, edited and deleted
+    // in Settings, and their text is kept on the TV between starts.
     // ==========================================================================
     function loadPlaylistsFromStorage() {
-        var stored = null;
-        try { stored = JSON.parse(localStorage.getItem(PLAYLISTS_KEY) || 'null'); } catch (e) { stored = null; }
+        var stored = readStoredJson(PLAYLISTS_KEY, null);
         state.playlists = (stored && stored.length) ? stored : [];
 
         // Drop the old bundled playlist entry left in storage by earlier builds —
@@ -1325,8 +1341,7 @@
         });
         if (state.playlists.length !== before) savePlaylists();
 
-        var raw = null;
-        try { raw = localStorage.getItem(ACTIVE_PLAYLISTS_KEY); } catch (e) { raw = null; }
+        var raw = readStored(ACTIVE_PLAYLISTS_KEY);
         var storedActive;
         if (raw === null) {
             storedActive = [];
@@ -1345,11 +1360,11 @@
     }
 
     function savePlaylists() {
-        try { localStorage.setItem(PLAYLISTS_KEY, JSON.stringify(state.playlists)); } catch (e) { /* non-fatal */ }
+        writeStored(PLAYLISTS_KEY, JSON.stringify(state.playlists));
     }
 
     function saveActivePlaylistIds() {
-        try { localStorage.setItem(ACTIVE_PLAYLISTS_KEY, JSON.stringify(state.activePlaylistIds)); } catch (e) { /* non-fatal */ }
+        writeStored(ACTIVE_PLAYLISTS_KEY, JSON.stringify(state.activePlaylistIds));
     }
 
     function deriveNameFromUrl(url) {
@@ -1362,16 +1377,17 @@
         }
     }
 
-    // Fetches every currently-active playlist in parallel and merges their
-    // channels. Each playlist is fetched/parsed independently — one bad URL
-    // shows an error for that playlist without blanking out the others.
-    // Used only for the initial bulk load at boot; interactive add/toggle/
-    // remove use the targeted helpers below instead, so a single playlist
-    // change doesn't have to wait on (or re-fetch) every other active one.
-    // A hung fetch (no route to the host, rather than a fast connection
-    // refusal) would otherwise never resolve or reject, leaving the loading
-    // indicator stuck on screen forever with nothing left to clear it.
-    // options: extra fetch settings (headers), optional.
+    // fetch with a time limit. A request that hangs (no route to the host,
+    // rather than a quick refusal) would otherwise never settle, and the
+    // loading indicator would stay on screen. options: extra fetch settings.
+    // Downloads a text file. Rejects on a time-out or an HTTP error status.
+    function fetchText(url, options) {
+        return fetchWithTimeout(url, options).then(function (res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.text();
+        });
+    }
+
     function fetchWithTimeout(url, options) {
         return new Promise(function (resolve, reject) {
             var settled = false;
@@ -1476,8 +1492,7 @@
 
     // Downloads a playlist, stores its text and resolves to { channels, text }.
     function downloadPlaylist(pl) {
-        return fetchWithTimeout(pl.url)
-            .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.text(); })
+        return fetchText(pl.url)
             .then(function (text) {
                 // A playlist far beyond any real one would only exhaust the TV's memory and storage.
                 if (text.length > PLAYLIST_MAX_CHARS) throw new Error('Playlist is too large');
@@ -1623,7 +1638,7 @@
     }
 
     function saveFavorites() {
-        try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(state.favorites)); } catch (e) { /* non-fatal */ }
+        writeStored(FAVORITES_KEY, JSON.stringify(state.favorites));
     }
 
     function visibleFavorites() {
@@ -1673,7 +1688,7 @@
     var SETTINGS_SECTIONS = ['Playlists', 'Playback', 'Channels', 'Updates', 'About'];
 
     function storeFlag(key, on) {
-        try { localStorage.setItem(key, on ? '1' : '0'); } catch (e) { /* non-fatal */ }
+        writeStored(key, on ? '1' : '0');
     }
 
     function activePlaylists() {
@@ -1771,7 +1786,7 @@
                 hint: 'Playlists mark channels that often do not play. Press OK to change: Dimmed shows them darker, Hidden leaves them out, Shown as normal treats them like any other.',
                 run: function () {
                     taggedMode = taggedMode === 'dim' ? 'hide' : (taggedMode === 'hide' ? 'show' : 'dim');
-                    try { localStorage.setItem(TAGGED_MODE_KEY, taggedMode); } catch (e) { /* non-fatal */ }
+                    writeStored(TAGGED_MODE_KEY, taggedMode);
                     rebuildChannels();
                 }
             });
@@ -1809,7 +1824,7 @@
                     autoUpdate = !autoUpdate;
                     storeFlag(AUTO_UPDATE_KEY, autoUpdate);
                     if (autoUpdate) { checkForUpdate(true); return; }
-                    try { localStorage.removeItem(UPDATE_KEY); } catch (e) { /* non-fatal */ }
+                    removeStored(UPDATE_KEY);
                     updateReady = '';
                     showToast('The built-in version ' + window.MYTVAPP_BUNDLED + ' runs from the next start');
                 }
@@ -1830,7 +1845,7 @@
                     if (developerMode) { showToast('Checking the dev branch…'); checkForUpdate(true); return; }
                     // Off: forget the test version. The next start runs the
                     // package's own version, which then updates to the released one.
-                    try { localStorage.removeItem(UPDATE_KEY); } catch (e) { /* non-fatal */ }
+                    removeStored(UPDATE_KEY);
                     updateReady = '';
                     showToast('Restart the app to return to the released version');
                 }
@@ -1843,8 +1858,7 @@
             rows.push({ kind: 'group', label: 'Status' });
             rows.push({ kind: 'info', label: 'Programme guide', value: state.guide ? 'built ' + ago(state.guideBuilt) : 'not loaded' });
             rows.push({ kind: 'info', label: 'Last update check', value: state.updateCheck || 'not yet' });
-            var lastError = null;
-            try { lastError = localStorage.getItem(LAST_ERROR_KEY); } catch (e) { lastError = null; }
+            var lastError = readStored(LAST_ERROR_KEY);
             rows.push({ kind: 'info', label: 'Last app error', value: lastError || 'none' });
             rows.push({ kind: 'group', label: 'Diagnostics' });
             rows.push({ kind: 'log', hint: 'The last things the app did, newest last. Press OK to refresh. Send these lines when something does not work.' });
@@ -1980,7 +1994,10 @@
             summary.textContent = sectionSummary(i);
             btn.appendChild(label);
             btn.appendChild(summary);
+            // A click opens the section too, not only a move of the remote onto it.
             btn.addEventListener('click', function () {
+                state.settingsSection = i;
+                renderSettings();
                 if (settingLines().length) Focus.setZone('settingsRows', 0, 0);
             });
             cats.appendChild(btn);
@@ -2077,13 +2094,6 @@
         return !!window.MYTVAPP_BUNDLED && (location.protocol.indexOf('http') !== 0 || location.hostname === 'localhost');
     }
 
-    function fetchUpdateText(url, options) {
-        return fetchWithTimeout(url, options).then(function (res) {
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return res.text();
-        });
-    }
-
     // manual: started from Settings, so it reports back and may restart at once.
     function checkForUpdate(manual) {
         if (!updatesPossible() || (!autoUpdate && !manual)) return;
@@ -2096,10 +2106,10 @@
         // the app can only ever update from the two GitHub addresses above.
         var override = null;
         if (location.hostname === 'localhost') {
-            try { override = localStorage.getItem(UPDATE_URL_KEY); } catch (e) { override = null; }
+            override = readStored(UPDATE_URL_KEY);
         }
         var findBase = override ? Promise.resolve(override)
-            : fetchUpdateText(UPDATE_API + branch, { headers: { Accept: 'application/vnd.github.sha' } }).then(function (sha) {
+            : fetchText(UPDATE_API + branch, { headers: { Accept: 'application/vnd.github.sha' } }).then(function (sha) {
                 sha = String(sha).trim();
                 if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error('unexpected answer for the ' + branch + ' commit');
                 return UPDATE_RAW + sha + '/';
@@ -2107,7 +2117,7 @@
 
         findBase.then(function (found) {
             base = found;
-            return fetchUpdateText(base + 'package.json');
+            return fetchText(base + 'package.json');
         }).then(function (text) {
             version = String(JSON.parse(text).version || '');
             var wanted = developerMode ? (version !== '' && version !== APP_VERSION) : versionNewer(version, APP_VERSION);
@@ -2124,8 +2134,7 @@
                 if (manual) showToast('MyTvApp ' + APP_VERSION + ' is the current version');
                 return null;
             }
-            var bad = null;
-            try { bad = localStorage.getItem(UPDATE_BAD_KEY); } catch (e) { bad = null; }
+            var bad = readStored(UPDATE_BAD_KEY);
             // A version that failed to start is not fetched again by itself.
             // "Check for updates now" may try it once more.
             if (bad === version && !manual) {
@@ -2133,9 +2142,9 @@
                 return null;
             }
             return Promise.all([
-                fetchUpdateText(base + 'index.html'),
-                fetchUpdateText(base + 'css/style.css'),
-                fetchUpdateText(base + 'js/main.js')
+                fetchText(base + 'index.html'),
+                fetchText(base + 'css/style.css'),
+                fetchText(base + 'js/main.js')
             ]);
         }).then(function (files) {
             if (!files) return;
@@ -2471,8 +2480,7 @@
     // preview starts. With "Open the last channel when the app starts" on, it
     // goes straight to full screen.
     function restoreLastChannel() {
-        var saved = null;
-        try { saved = JSON.parse(localStorage.getItem(LAST_CHANNEL_KEY) || 'null'); } catch (e) { saved = null; }
+        var saved = readStoredJson(LAST_CHANNEL_KEY, null);
         if (!saved || !saved.url || activeScreenId() !== 'screen-live') return;
 
         var section = null;
@@ -2497,8 +2505,7 @@
 
         // The previous start put the list on this channel and never got as far
         // as a picture or a key press: do not start it again by itself.
-        var pending = null;
-        try { pending = localStorage.getItem(REOPEN_PENDING_KEY); } catch (e) { pending = null; }
+        var pending = readStored(REOPEN_PENDING_KEY);
         if (pending === '1') {
             reopenPending = true;
             clearReopenPending();
@@ -2518,7 +2525,7 @@
     function clearReopenPending() {
         if (!reopenPending) return;
         reopenPending = false;
-        try { localStorage.removeItem(REOPEN_PENDING_KEY); } catch (e) { /* non-fatal */ }
+        removeStored(REOPEN_PENDING_KEY);
     }
 
     function zapChannel(delta) {

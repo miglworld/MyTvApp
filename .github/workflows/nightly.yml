@@ -1,0 +1,76 @@
+name: Nightly
+
+# Longer runs that would slow every push: an OWASP ZAP baseline scan and
+# Lighthouse with limits. Both run against the
+# app served from this checkout on localhost, never against GitHub Pages or any
+# other host.
+on:
+  schedule:
+    - cron: '41 2 * * *'
+  workflow_dispatch:
+  # Also when this workflow or the Lighthouse limits change, so a change to
+  # them is tried before it is merged.
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/nightly.yml'
+      - '.lighthouserc.json'
+      - '.zap-rules.tsv'
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22.12.0'
+
+jobs:
+  dast:
+    name: ZAP baseline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Serve the app on localhost
+        run: python3 -m http.server 8765 --bind 127.0.0.1 &
+      # Report only: the findings are about the test server's headers, and the
+      # real host is GitHub Pages, whose headers this repository cannot set.
+      - name: OWASP ZAP baseline 2.16.0
+        run: >
+          docker run --rm --network host -v "$PWD:/zap/wrk:rw"
+          ghcr.io/zaproxy/zaproxy:2.16.0
+          zap-baseline.py -t http://127.0.0.1:8765/index.html -r zap-report.html -J zap-report.json -I
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: |
+            zap-report.html
+            zap-report.json
+          retention-days: 30
+          if-no-files-found: ignore
+
+  lighthouse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      # Limits in .lighthouserc.json: Google's "good" thresholds for Core Web
+      # Vitals (largest paint 2.5 s, layout shift 0.1), with Total Blocking Time
+      # 200 ms standing in for responsiveness, which a lab run cannot measure.
+      - name: Lighthouse CI 0.14.0, three runs of the app page
+        run: npx --yes @lhci/cli@0.14.0 collect --config=.lighthouserc.json
+      - name: Keep the reports
+        if: always()
+        run: npx --yes @lhci/cli@0.14.0 upload --config=.lighthouserc.json
+      - name: Fail above the limits
+        run: npx --yes @lhci/cli@0.14.0 assert --config=.lighthouserc.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse
+          path: lighthouse/
+          retention-days: 30
+          if-no-files-found: ignore

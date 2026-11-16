@@ -206,8 +206,9 @@ guide/config.json       Which playlists and guide feeds the programme guide is b
 scripts/build-wgt.sh    Builds the unsigned MyTvApp.wgt
 scripts/build-guide.js  Builds the small programme guide (run by GitHub on a schedule)
 scripts/check.sh        Checks run before every merge (also by GitHub on each pull request)
-scripts/test.js         Tests for the playlist reader, list window and guide lookup
-scripts/test-guide.js   Tests for the guide builder
+test/                   Unit, integration and defensive tests (npm test)
+e2e/                    Browser tests and the crawler (npx playwright test)
+perf/                   Performance smoke test and its comparison with the base branch
 scripts/screenshots/    Retakes the README screenshots from a demo setup
 docs/decisions.md       Why the app is built the way it is
 ```
