@@ -233,3 +233,22 @@ test('a playlist that fails to load shows a message and the rest of the app stil
     await page.click('#navSettings');
     expect(await activeScreen(page)).toBe('screen-settings');
 });
+
+test('a saved channel reopens after a restart, and a key press does not overflow the stack', async ({ page }) => {
+    // Regression: removing a stored value called itself until the stack ran out.
+    await open(page);
+    await press(page, KEY.OK);
+    await expect(page.locator('#screen-player')).toHaveClass(/active/);
+    await press(page, KEY.BACK);
+    await page.evaluate(() => {
+        localStorage.setItem('iptv_reopen_last', '1');
+        localStorage.setItem('iptv_reopen_pending', '1');
+    });
+    const errors = watchPage(page);
+    await page.reload();
+    await expect(page.locator('.live-row').first()).toBeVisible({ timeout: 15000 });
+    await press(page, KEY.DOWN);
+    await page.waitForTimeout(300);
+    expect(errors, 'page errors').toEqual([]);
+    expect(await page.evaluate(() => localStorage.getItem('iptv_reopen_pending'))).toBeNull();
+});

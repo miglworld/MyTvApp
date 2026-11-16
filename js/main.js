@@ -202,7 +202,7 @@
         try { localStorage.setItem(key, value); } catch (e) { /* non-fatal: the setting is kept until the app closes */ }
     }
     function removeStored(key) {
-        removeStored(key);
+        try { localStorage.removeItem(key); } catch (e) { /* non-fatal: the value stays until the app is reset */ }
     }
 
     // Optional Samsung player settings (Settings screen). Off by default: the
