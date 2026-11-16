@@ -2,6 +2,9 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.12.6 (dev branch, not released yet)
+- Updates: while the app runs, it checks GitHub for a newer version every two minutes (when automatic updates are on). A downloaded update shows the corner notice ("Update now" or "Later") as soon as it arrives, not only at the next start. Nothing is checked again while a downloaded update is waiting.
+
 ## v0.12.5 (2026-11-16)
 - Fixed: a key press after the app reopened the last channel could stop the app with "Maximum call stack size exceeded". Removing a stored value called itself until the stack ran out.
 
