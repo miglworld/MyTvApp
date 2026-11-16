@@ -939,6 +939,11 @@ html.avplay-active .favorite-btn {
    remote is on. Rows share one shape: label on the left, then a value, a
    switch or an arrow on the right.
    ========================================================================== */
+/* Above the picture, like the Live TV and guide screens, so the panels sit on it. */
+#screen-settings {
+	z-index: 2;
+}
+
 #screen-settings.active {
 	display: flex;
 	padding: 28px 28px 28px 20px;
