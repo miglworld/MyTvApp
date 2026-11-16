@@ -2,6 +2,12 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.12.5 (2026-11-16)
+- Fixed: a key press after the app reopened the last channel could stop the app with "Maximum call stack size exceeded". Removing a stored value called itself until the stack ran out.
+
+## v0.12.4 (2026-11-15)
+- Settings, **Report a problem**: a QR code that opens a new GitHub issue on your phone, already filled in with the app version, the TV's software and the last events. Web addresses in it are cut to their server name, so playlist logins stay on the TV. The screen shows the whole report before you scan.
+
 ## v0.12.3 (2026-11-15)
 - Settings: choosing a section with OK now opens it; before, only moving onto it did.
 - A playlist group called `__proto__` no longer stops the channel list from loading.

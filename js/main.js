@@ -30,7 +30,8 @@
     if (typeof document === 'undefined') {
         if (typeof module !== 'undefined') module.exports = {
             parseM3U: parseM3U, versionNewer: versionNewer, isStreamUrl: isStreamUrl, cleanUserAgent: cleanUserAgent,
-            listWindow: listWindow, guideIndexAt: guideIndexAt, isTagged: isTagged, ago: ago
+            listWindow: listWindow, guideIndexAt: guideIndexAt, isTagged: isTagged, ago: ago,
+            qrMatrix: qrMatrix, reportLink: reportLink, redactAddresses: redactAddresses
         };
         return;
     }
@@ -38,7 +39,7 @@
     // ==========================================================================
     // Config / constants
     // ==========================================================================
-    var APP_VERSION = '0.12.3';
+    var APP_VERSION = '0.12.5';
     var PLAYLISTS_KEY = 'iptv_playlists';
     var ACTIVE_PLAYLISTS_KEY = 'iptv_active_playlist_id';
     var FAVORITES_KEY = 'iptv_favorites';
@@ -64,6 +65,11 @@
     // test versions that are not merged yet.
     var UPDATE_API = 'https://api.github.com/repos/miglworld/MyTvApp/commits/';
     var UPDATE_RAW = 'https://raw.githubusercontent.com/miglworld/MyTvApp/';
+    // Settings > Report a problem: the QR code opens a new issue here. The
+    // longest address put in the code keeps it at version 20 or below
+    // (97 modules), which a phone reads from across the room.
+    var REPORT_ISSUE_URL = 'https://github.com/miglworld/MyTvApp/issues/new';
+    var REPORT_MAX = 850;
     var DEVELOPER_MODE_KEY = 'iptv_developer_mode';
 
     // Programme guide: a small file this repository builds every few hours
@@ -196,7 +202,7 @@
         try { localStorage.setItem(key, value); } catch (e) { /* non-fatal: the setting is kept until the app closes */ }
     }
     function removeStored(key) {
-        removeStored(key);
+        try { localStorage.removeItem(key); } catch (e) { /* non-fatal: the value stays until the app is reset */ }
     }
 
     // Optional Samsung player settings (Settings screen). Off by default: the
@@ -1685,7 +1691,7 @@
     //   info     a fact                        { label, value }
     //   log      the diagnostics list
     // ==========================================================================
-    var SETTINGS_SECTIONS = ['Playlists', 'Playback', 'Channels', 'Updates', 'About'];
+    var SETTINGS_SECTIONS = ['Playlists', 'Playback', 'Channels', 'Updates', 'About', 'Report a problem'];
 
     function storeFlag(key, on) {
         writeStored(key, on ? '1' : '0');
@@ -1718,6 +1724,280 @@
 
     function appSource() {
         return window.MYTVAPP_SOURCE || (location.protocol.indexOf('http') === 0 ? 'web page / TizenBrew module' : 'installed package');
+    }
+
+    // ----- Report a problem ---------------------------------------------------
+    // The TV shows a QR code; the phone that scans it opens a new GitHub issue
+    // already filled in with the facts below. The TV itself sends nothing.
+
+    // Web addresses are cut to their server: playlist and stream addresses
+    // can carry a login ("http://host/get.php?username=...&password=...").
+    function redactAddresses(text) {
+        return String(text).replace(/\b[a-z][a-z0-9+.-]*:\/\/([^/\s?#]*)\S*/gi, function (m, authority) {
+            return (authority.split('@').pop() || '') + '/…';
+        });
+    }
+
+    // The issue text: what the person writes, then what the TV knows.
+    // facts: [[label, value], ...]; lines: diagnostics, oldest first.
+    function reportBody(facts, lines) {
+        var text = '**What went wrong?**\n\n\n**From the TV**\n';
+        facts.forEach(function (f) { text += '- ' + f[0] + ': ' + redactAddresses(f[1]) + '\n'; });
+        if (lines.length) text += '\n**Last events**\n```\n' + lines.map(redactAddresses).join('\n') + '\n```\n';
+        return text;
+    }
+
+    function formEncode(text) {
+        return encodeURIComponent(text).replace(/%20/g, '+');
+    }
+
+    // { url, body } for the issue. The oldest diagnostics are left out until
+    // the address is at most `max` characters.
+    function reportLink(base, title, facts, lines, max) {
+        var kept = lines.slice();
+        for (;;) {
+            var body = reportBody(facts, kept);
+            var url = base + '?title=' + formEncode(title) + '&body=' + formEncode(body);
+            if (url.length <= max || !kept.length) return { url: url, body: body };
+            kept.shift();
+        }
+    }
+
+    // QR code, written for this app (a library file would not reach TVs that
+    // update themselves: only this script, the page and the stylesheet do).
+    // Byte mode, error correction level L, versions 1 to 20. Returns rows of
+    // booleans (true = dark), or null when the text does not fit.
+    // test/qr.test.js decodes the result with an independent QR reader.
+    function qrMatrix(text) {
+        // Per version: [blocks, codewords per block, data codewords per block],
+        // a second group when the version has one. From the QR standard, level L.
+        var BLOCKS = [[1, 26, 19], [1, 44, 34], [1, 70, 55], [1, 100, 80], [1, 134, 108], [2, 86, 68], [2, 98, 78],
+            [2, 121, 97], [2, 146, 116], [2, 86, 68, 2, 87, 69], [4, 101, 81], [2, 116, 92, 2, 117, 93], [4, 133, 107],
+            [3, 145, 115, 1, 146, 116], [5, 109, 87, 1, 110, 88], [5, 122, 98, 1, 123, 99], [1, 135, 107, 5, 136, 108],
+            [5, 150, 120, 1, 151, 121], [3, 141, 113, 4, 142, 114], [3, 135, 107, 5, 136, 108]];
+        // Alignment pattern centres per version.
+        var ALIGN = [[], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50],
+            [6, 30, 54], [6, 32, 58], [6, 34, 62], [6, 26, 46, 66], [6, 26, 48, 70], [6, 26, 50, 74], [6, 30, 54, 78],
+            [6, 30, 56, 82], [6, 30, 58, 86], [6, 34, 62, 90]];
+
+        var bytes = [];
+        var utf8 = unescape(encodeURIComponent(String(text)));
+        for (var c = 0; c < utf8.length; c++) bytes.push(utf8.charCodeAt(c));
+
+        // The smallest version that holds the text.
+        var version = 0, groups, dataCount = 0;
+        for (var v = 1; v <= 20; v++) {
+            groups = BLOCKS[v - 1];
+            dataCount = groups[0] * groups[2] + (groups[3] ? groups[3] * groups[5] : 0);
+            if (4 + (v < 10 ? 8 : 16) + bytes.length * 8 <= dataCount * 8) { version = v; break; }
+        }
+        if (!version) return null;
+
+        // Bit stream: mode, length, bytes, end mark, padding.
+        var bits = [];
+        var put = function (value, length) { for (var i = length - 1; i >= 0; i--) bits.push((value >>> i) & 1); };
+        put(4, 4);
+        put(bytes.length, version < 10 ? 8 : 16);
+        bytes.forEach(function (b) { put(b, 8); });
+        put(0, Math.min(4, dataCount * 8 - bits.length));
+        put(0, (8 - bits.length % 8) % 8);
+        for (var pad = 0; bits.length < dataCount * 8; pad++) put(pad % 2 ? 0x11 : 0xEC, 8);
+        var data = [];
+        for (var k = 0; k < bits.length; k += 8) {
+            var byte = 0;
+            for (var bit = 0; bit < 8; bit++) byte = (byte << 1) | bits[k + bit];
+            data.push(byte);
+        }
+
+        // Reed-Solomon error correction over GF(256), per block.
+        var exp = [], log = [];
+        for (var e = 0, x = 1; e < 255; e++) { exp[e] = x; log[x] = e; x <<= 1; if (x & 256) x ^= 0x11D; }
+        var mul = function (a, b) { return a && b ? exp[(log[a] + log[b]) % 255] : 0; };
+        var eccCount = groups[1] - groups[2];
+        var divisor = [];
+        for (var d = 0; d < eccCount; d++) divisor.push(0);
+        divisor[eccCount - 1] = 1;
+        for (var r = 0, root = 1; r < eccCount; r++) {
+            for (var j = 0; j < eccCount; j++) {
+                divisor[j] = mul(divisor[j], root);
+                if (j + 1 < eccCount) divisor[j] ^= divisor[j + 1];
+            }
+            root = mul(root, 2);
+        }
+        var blocks = [], eccs = [], offset = 0;
+        [[groups[0], groups[2]], [groups[3] || 0, groups[5] || 0]].forEach(function (group) {
+            for (var n = 0; n < group[0]; n++) {
+                var block = data.slice(offset, offset + group[1]);
+                offset += group[1];
+                var rest = divisor.map(function () { return 0; });
+                block.forEach(function (value) {
+                    var factor = value ^ rest.shift();
+                    rest.push(0);
+                    for (var i = 0; i < eccCount; i++) rest[i] ^= mul(divisor[i], factor);
+                });
+                blocks.push(block);
+                eccs.push(rest);
+            }
+        });
+        var codewords = [];
+        var interleave = function (lists) {
+            var longest = Math.max.apply(null, lists.map(function (l) { return l.length; }));
+            for (var i = 0; i < longest; i++) lists.forEach(function (l) { if (i < l.length) codewords.push(l[i]); });
+        };
+        interleave(blocks);
+        interleave(eccs);
+
+        // The grid: fixed patterns first, then the codewords around them.
+        var size = version * 4 + 17;
+        var dark = [], fixed = [];
+        for (var row = 0; row < size; row++) { dark.push([]); fixed.push([]); for (var col = 0; col < size; col++) { dark[row].push(false); fixed[row].push(false); } }
+        var set = function (px, py, on) { dark[py][px] = on; fixed[py][px] = true; };
+        for (var t = 0; t < size; t++) { set(6, t, t % 2 === 0); set(t, 6, t % 2 === 0); }
+        [[3, 3], [size - 4, 3], [3, size - 4]].forEach(function (centre) {
+            for (var dy = -4; dy <= 4; dy++) {
+                for (var dx = -4; dx <= 4; dx++) {
+                    var fx = centre[0] + dx, fy = centre[1] + dy;
+                    var dist = Math.max(Math.abs(dx), Math.abs(dy));
+                    if (fx >= 0 && fx < size && fy >= 0 && fy < size) set(fx, fy, dist !== 2 && dist !== 4);
+                }
+            }
+        });
+        var centres = ALIGN[version - 1], last = centres.length - 1;
+        centres.forEach(function (ay, i) {
+            centres.forEach(function (ax, j) {
+                if ((i === 0 && j === 0) || (i === 0 && j === last) || (i === last && j === 0)) return;
+                for (var dy = -2; dy <= 2; dy++) {
+                    for (var dx = -2; dx <= 2; dx++) set(ax + dx, ay + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+                }
+            });
+        });
+        var drawFormat = function (mask) {
+            var value = (1 << 3) | mask;   // level L is 01
+            var rem = value;
+            for (var i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+            var f = ((value << 10) | rem) ^ 0x5412;
+            var on = function (n) { return ((f >>> n) & 1) !== 0; };
+            for (i = 0; i <= 5; i++) set(8, i, on(i));
+            set(8, 7, on(6));
+            set(8, 8, on(7));
+            set(7, 8, on(8));
+            for (i = 9; i < 15; i++) set(14 - i, 8, on(i));
+            for (i = 0; i < 8; i++) set(size - 1 - i, 8, on(i));
+            for (i = 8; i < 15; i++) set(8, size - 15 + i, on(i));
+            set(8, size - 8, true);
+        };
+        drawFormat(0);   // reserves its modules; drawn again with the chosen mask
+        if (version >= 7) {
+            var rem = version;
+            for (var vb = 0; vb < 12; vb++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1F25);
+            var info = (version << 12) | rem;
+            for (var vi = 0; vi < 18; vi++) {
+                var on = ((info >>> vi) & 1) !== 0;
+                var a = size - 11 + vi % 3, b = Math.floor(vi / 3);
+                set(a, b, on);
+                set(b, a, on);
+            }
+        }
+        var index = 0;
+        for (var right = size - 1; right >= 1; right -= 2) {
+            if (right === 6) right = 5;
+            for (var vert = 0; vert < size; vert++) {
+                for (var side = 0; side < 2; side++) {
+                    var cx = right - side;
+                    var cy = ((right + 1) & 2) === 0 ? size - 1 - vert : vert;
+                    if (fixed[cy][cx] || index >= codewords.length * 8) continue;
+                    dark[cy][cx] = ((codewords[index >>> 3] >>> (7 - (index & 7))) & 1) !== 0;
+                    index++;
+                }
+            }
+        }
+
+        // The eight masks; the one that leaves the fewest long runs, 2x2
+        // squares and imbalance is kept, as the standard recommends.
+        var MASKS = [
+            function (mx, my) { return (mx + my) % 2 === 0; },
+            function (mx, my) { return my % 2 === 0; },
+            function (mx) { return mx % 3 === 0; },
+            function (mx, my) { return (mx + my) % 3 === 0; },
+            function (mx, my) { return (Math.floor(mx / 3) + Math.floor(my / 2)) % 2 === 0; },
+            function (mx, my) { return mx * my % 2 + mx * my % 3 === 0; },
+            function (mx, my) { return (mx * my % 2 + mx * my % 3) % 2 === 0; },
+            function (mx, my) { return ((mx + my) % 2 + mx * my % 3) % 2 === 0; }
+        ];
+        var applyMask = function (m) {
+            for (var my = 0; my < size; my++) {
+                for (var mx = 0; mx < size; mx++) if (!fixed[my][mx] && MASKS[m](mx, my)) dark[my][mx] = !dark[my][mx];
+            }
+        };
+        var penalty = function () {
+            var score = 0, darkCount = 0;
+            for (var py = 0; py < size; py++) {
+                for (var px = 0; px < size; px++) {
+                    if (dark[py][px]) darkCount++;
+                    if (px < size - 1 && py < size - 1 && dark[py][px] === dark[py][px + 1] &&
+                        dark[py][px] === dark[py + 1][px] && dark[py][px] === dark[py + 1][px + 1]) score += 3;
+                }
+            }
+            for (var line = 0; line < size; line++) {
+                var runRow = 1, runCol = 1;
+                for (var p = 1; p < size; p++) {
+                    runRow = dark[line][p] === dark[line][p - 1] ? runRow + 1 : 1;
+                    runCol = dark[p][line] === dark[p - 1][line] ? runCol + 1 : 1;
+                    if (runRow === 5) score += 3; else if (runRow > 5) score += 1;
+                    if (runCol === 5) score += 3; else if (runCol > 5) score += 1;
+                }
+            }
+            return score + Math.floor(Math.abs(darkCount * 20 - size * size * 10) / (size * size)) * 10;
+        };
+        var best = 0, bestScore = Infinity;
+        for (var m = 0; m < 8; m++) {
+            applyMask(m);
+            drawFormat(m);
+            var s = penalty();
+            if (s < bestScore) { bestScore = s; best = m; }
+            applyMask(m);   // the same mask again undoes it
+        }
+        applyMask(best);
+        drawFormat(best);
+        return dark;
+    }
+
+    // The QR code as an SVG drawing, with the light margin around it that
+    // readers need.
+    function qrSvg(matrix) {
+        var NS = 'http://www.w3.org/2000/svg';
+        var margin = 4, side = matrix.length + margin * 2;
+        var svg = document.createElementNS(NS, 'svg');
+        svg.setAttribute('viewBox', '0 0 ' + side + ' ' + side);
+        svg.setAttribute('shape-rendering', 'crispEdges');
+        var path = '';
+        matrix.forEach(function (cells, y) {
+            cells.forEach(function (on, x) { if (on) path += 'M' + (x + margin) + ' ' + (y + margin) + 'h1v1h-1z'; });
+        });
+        var back = document.createElementNS(NS, 'rect');
+        back.setAttribute('width', side);
+        back.setAttribute('height', side);
+        back.setAttribute('fill', '#fff');
+        var modules = document.createElementNS(NS, 'path');
+        modules.setAttribute('d', path);
+        modules.setAttribute('fill', '#000');
+        svg.appendChild(back);
+        svg.appendChild(modules);
+        return svg;
+    }
+
+    function currentReport() {
+        var lastError = readStored(LAST_ERROR_KEY);
+        var facts = [
+            ['Version', APP_VERSION + (developerMode ? ' (developer mode)' : '')],
+            ['Running from', appSource()],
+            ['TV software', tvSoftware()],
+            ['Samsung player', hasAvplay ? 'available' : 'not available'],
+            ['Playlists on', String(activePlaylists().length)],
+            ['Channels', String(state.channels.length)],
+            ['Last app error', lastError || 'none']
+        ];
+        return reportLink(REPORT_ISSUE_URL, 'MyTvApp ' + APP_VERSION + ': ', facts, readLog(), REPORT_MAX);
     }
 
     // The short text beside a section's name.
@@ -1850,6 +2130,8 @@
                     showToast('Restart the app to return to the released version');
                 }
             });
+        } else if (index === 5) {
+            rows.push({ kind: 'report', hint: 'This is everything the report contains. Web addresses are cut to their server name, so playlist logins stay on this TV. Press OK to refresh.' });
         } else {
             rows.push({ kind: 'info', label: 'Version', value: APP_VERSION + (developerMode ? ' (developer mode)' : '') });
             rows.push({ kind: 'info', label: 'Running from', value: appSource() });
@@ -1861,7 +2143,7 @@
             var lastError = readStored(LAST_ERROR_KEY);
             rows.push({ kind: 'info', label: 'Last app error', value: lastError || 'none' });
             rows.push({ kind: 'group', label: 'Diagnostics' });
-            rows.push({ kind: 'log', hint: 'The last things the app did, newest last. Press OK to refresh. Send these lines when something does not work.' });
+            rows.push({ kind: 'log', hint: 'The last things the app did, newest last. Press OK to refresh. Report a problem sends them with a bug report.' });
         }
         return rows;
     }
@@ -1924,6 +2206,7 @@
             btn.addEventListener('click', refreshSettings);
             return settingLine(row.hint, [btn]);
         }
+        if (row.kind === 'report') return buildReport(row.hint);
         if (row.kind === 'playlist') return buildPlaylistLine(row.pl);
 
         btn = settingButton(row.label, row.run);
@@ -1940,6 +2223,43 @@
             btn.appendChild(arrow);
         }
         return settingLine(row.hint, [btn]);
+    }
+
+    // Report a problem: the QR code and what to do with it on the left, the
+    // whole report on the right (the line the remote is on), so both fit on
+    // one screen without scrolling.
+    function buildReport(hint) {
+        var report = currentReport();
+        var layout = document.createElement('div');
+        layout.className = 'report-layout';
+        var card = document.createElement('div');
+        card.className = 'report-card';
+        var code = document.createElement('div');
+        code.className = 'report-code';
+        var matrix = qrMatrix(report.url);
+        if (matrix) code.appendChild(qrSvg(matrix));
+        var text = document.createElement('div');
+        text.className = 'report-text';
+        var title = document.createElement('div');
+        title.className = 'report-title';
+        title.textContent = 'Scan with your phone';
+        var steps = document.createElement('p');
+        steps.textContent = 'It opens a new bug report for MyTvApp on GitHub, already filled in with this TV’s details. Say what went wrong and send it from your phone.';
+        var note = document.createElement('p');
+        note.className = 'report-note';
+        note.textContent = 'The TV sends nothing itself. Sending needs a free GitHub account.';
+        text.appendChild(title);
+        text.appendChild(steps);
+        text.appendChild(note);
+        card.appendChild(code);
+        card.appendChild(text);
+        var body = document.createElement('button');
+        body.className = 'setting-row setting-log';
+        body.textContent = report.body;
+        body.addEventListener('click', refreshSettings);
+        layout.appendChild(card);
+        layout.appendChild(settingLine(hint, [body]));
+        return layout;
     }
 
     // One playlist: the row switches it on or off; Edit and Delete beside it.
