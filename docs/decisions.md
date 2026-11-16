@@ -41,16 +41,16 @@ Why MyTvApp is built the way it is. One entry per decision that would be expensi
 ## 2. The package starts `index.html` directly, not a launcher page
 *November 2026*
 
-**Context.** Versions 1.5.0 to 0.8.1 started through `launcher.html`, which downloaded the app from GitHub on every start and built it inside its own page (first with `document.write()`, then with ordinary DOM calls). Both worked in desktop browsers. On the TV every one of those packages showed a black screen; the cause was never identified.
+**Context.** Versions 0.6 to 0.8.1 started through `launcher.html`, which downloaded the app from GitHub on every start and built it inside its own page (first with `document.write()`, then with ordinary DOM calls). Both worked in desktop browsers. On the TV every one of those packages showed a black screen; the cause was never identified.
 
-**Decision.** `config.xml` starts `index.html`, as the last working package (1.4.2) did. The launcher was removed.
+**Decision.** `config.xml` starts `index.html`, as the last working package (v0.5) did. The launcher was removed.
 
 **Consequences.** The start path is the one known to work on the TV. Self-update had to be solved another way (decision 3).
 
 ## 1. The Samsung player is driven as simply as possible
 *November 2026*
 
-**Context.** Between 1.4.2 and 0.8.1 the app also asked the Samsung player (AVPlay) for picture size and bitrate from inside the player's own callbacks, and set extra streaming options. The TV showed black screens in that period.
+**Context.** Between v0.5 and 0.8.1 the app also asked the Samsung player (AVPlay) for picture size and bitrate from inside the player's own callbacks, and set extra streaming options. The TV showed black screens in that period.
 
 **Decision.** The call order is the plain one: open, display area, listener, prepare, play. The player is never called from inside its callbacks. Picture information is read only when Right or INFO is pressed. Extra options (best start quality, aspect ratio, short buffer, a playlist's user agent) are each a switch in Settings.
 

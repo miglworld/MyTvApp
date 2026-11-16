@@ -19,3 +19,15 @@ node_modules/
 # Demo page and data that scripts/screenshots/capture.sh builds and removes
 _shot.html
 _shots/
+
+# Test output
+node_modules/
+test-results/
+playwright-report/
+e2e-results.json
+e2e-crawl.json
+lighthouse/
+zap-report.html
+lighthouse/
+.lighthouseci/
+zap-report.json
