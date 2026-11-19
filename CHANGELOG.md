@@ -2,6 +2,20 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.12.13 (dev branch, not released yet)
+- Channels whose names are the same after tidying get their quality in brackets, so "BBC One FHD" and "BBC One SD" show as "BBC One (FHD)" and "BBC One (SD)". Copies are still matched by their plain name, so copy switching is unchanged. Two channels with the same name and no quality stay the same.
+
+## v0.12.12 (dev branch, not released yet)
+- Copies of a channel: when a channel will not play on any player, the app tries the next copy of the same channel (same playlist, same name, same tvg-id when both give one), such as HD after FHD. A toast and a diagnostics line say which copy it is trying. Copies that failed recently are tried last, and at most two other copies are tried in one go. The row in the list does not move.
+
+## v0.12.11 (dev branch, not released yet)
+- Channel names are tidied as the playlist loads: quality tags (FHD, UHD, HD, SD, 4K and resolutions such as 720p or 576p) and the small "ᴴᴰ" marks are left out, a two-letter country prefix such as "UK |" is removed, and emoji are removed. Three-letter prefixes such as "USA |" are kept. "[Geo-blocked]" and "[Not 24/7]" still dim a channel, because they are read from the name as the playlist gave it. Favorites saved earlier are tidied the same way.
+
+## v0.12.10 (dev branch, not released yet)
+- Playlists: **Xtream Codes accounts.** In Settings, Playlists, "Add an Xtream Codes account" takes the server address, username and password from your provider. The app asks the server's `player_api.php` for the live categories and live channels only, so they show in Live TV like an M3U playlist, without downloading the account's films and series. A wrong username or password says so. An account can be edited, switched off and deleted like any playlist.
+- Privacy: the password of an Xtream account is replaced with dots in the diagnostics list, the last app error and the error box, so it never reaches About or Report a problem. Settings shows the account's server and username only.
+- Each field opens the TV keyboard only when you press OK on it. Done on the keyboard moves to the next field, and from the password to Save.
+
 ## v0.12.9 (dev branch, not released yet)
 - Accessibility: the TV's screen reader (Voice Guide) can follow the remote. The control the remote is on now also takes the browser's focus, so it is read out. Settings switches say whether they are on, channel rows and guide programmes read their name and programme, the menu's icons keep their names when the menu folds, and messages such as "Could not load" are announced.
 - The address field still opens the TV keyboard only when you press OK on it.
