@@ -354,3 +354,10 @@ test('the quality is kept in the case a playlist gives it, resolutions in lower 
     assert.strictEqual(app.qualityLabel({ rawName: 'Sky Sport hd' }), 'HD');
     assert.strictEqual(app.qualityLabel({ rawName: 'Rai 1 576P' }), '576p');
 });
+
+test('coming back to the front checks for an update at most once a minute', function () {
+    assert.strictEqual(app.returnCheckDue(0, 60 * 1000), true);
+    assert.strictEqual(app.returnCheckDue(0, 59 * 1000), false);
+    assert.strictEqual(app.returnCheckDue(100000, 100000 + 30000), false);
+    assert.strictEqual(app.returnCheckDue(100000, 100000 + 60000), true);
+});

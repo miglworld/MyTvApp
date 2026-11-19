@@ -38,7 +38,7 @@
         if (typeof module !== 'undefined') module.exports = {
             parseM3U: parseM3U, versionNewer: versionNewer, isStreamUrl: isStreamUrl, cleanUserAgent: cleanUserAgent,
             listWindow: listWindow, guideIndexAt: guideIndexAt, isTagged: isTagged, channelTags: channelTags, countryIn: countryIn, ago: ago, cleanName: cleanName,
-            nextCopyFrom: nextCopyFrom, qualityLabel: qualityLabel, labelClashes: labelClashes,
+            nextCopyFrom: nextCopyFrom, qualityLabel: qualityLabel, labelClashes: labelClashes, returnCheckDue: returnCheckDue,
             qrMatrix: qrMatrix, reportLink: reportLink, redactAddresses: redactAddresses,
             normalizeXtreamServer: normalizeXtreamServer, xtreamApiUrl: xtreamApiUrl, xtreamM3u: xtreamM3u,
             playlistAddress: playlistAddress, redactLogins: redactLogins
@@ -49,7 +49,7 @@
     // ==========================================================================
     // Config / constants
     // ==========================================================================
-    var APP_VERSION = '0.13.2';
+    var APP_VERSION = '0.13.3';
     var PLAYLISTS_KEY = 'iptv_playlists';
     var ACTIVE_PLAYLISTS_KEY = 'iptv_active_playlist_id';
     var FAVORITES_KEY = 'iptv_favorites';
@@ -2717,6 +2717,13 @@
         return !!window.MYTVAPP_BUNDLED && (location.protocol.indexOf('http') !== 0 || location.hostname === 'localhost');
     }
 
+    // Coming back to the front checks for an update again, at most once a minute,
+    // so quick switches between apps do not start a check each time.
+    var lastReturnCheck = 0;
+    function returnCheckDue(last, now) {
+        return now - last >= 60 * 1000;
+    }
+
     // manual: started from Settings, so it reports back and may restart at once.
     // periodic: the repeat check while the app runs. It stays quiet when there
     // is nothing new, and does nothing while a downloaded update is waiting.
@@ -3817,6 +3824,13 @@
     // The TV takes the video hardware away when the app goes to the background
     // (Home key, another app). Without this the picture stays black on return.
     document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) {
+            var now = Date.now();
+            if (returnCheckDue(lastReturnCheck, now)) {
+                lastReturnCheck = now;
+                checkForUpdate(false, true);
+            }
+        }
         if (!state.nowPlaying) return;
         logEvent(document.hidden ? 'app hidden' : 'app visible again');
         if (document.hidden) {
