@@ -34,7 +34,7 @@
             nextCopyFrom: nextCopyFrom, qualityLabel: qualityLabel, labelClashes: labelClashes,
             qrMatrix: qrMatrix, reportLink: reportLink, redactAddresses: redactAddresses,
             normalizeXtreamServer: normalizeXtreamServer, xtreamApiUrl: xtreamApiUrl, xtreamM3u: xtreamM3u,
-            playlistAddress: playlistAddress, maskSecrets: maskSecrets
+            playlistAddress: playlistAddress, redactLogins: redactLogins
         };
         return;
     }
@@ -345,7 +345,7 @@
         return logLines;
     }
     function logEvent(msg) {
-        msg = maskSecrets(msg);
+        msg = redactLogins(msg);
         var d = new Date();
         var two = function (n) { return (n < 10 ? '0' : '') + n; };
         var lines = readLog();
@@ -357,7 +357,7 @@
     if (window.MYTVAPP_ERROR && !window.MYTVAPP_ERROR.logged) {
         var showError = window.MYTVAPP_ERROR;
         window.MYTVAPP_ERROR = function (text) {
-            text = maskSecrets(text);
+            text = redactLogins(text);
             logEvent('ERROR ' + text);
             // Kept on its own as well: the list above is short and moves on.
             writeStored(LAST_ERROR_KEY, new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC \u00b7 ' + APP_VERSION + ' \u00b7 ' + String(text).slice(0, 200));
@@ -1627,7 +1627,7 @@
     // (/live/USER/PASSWORD/101.ts), and a login written into an address
     // (http://user:PASSWORD@host). Used on everything the diagnostics keep.
     // It works from the text alone and never reads the saved passwords.
-    function maskSecrets(text) {
+    function redactLogins(text) {
         return String(text)
             .replace(/(\bpassword=)[^&\s#]*/gi, '$1•••')
             .replace(/(\/(?:live|movie|series|timeshift)\/[^/\s?#]+\/)[^/\s?#]+(?=\/)/gi, '$1•••')
