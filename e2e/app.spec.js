@@ -206,6 +206,36 @@ test('settings: a switch changes its stored value and its drawn state', async ({
     expect(await sw.evaluate((el) => el.classList.contains('on'))).not.toBe(drawnBefore);
 });
 
+test('focus: the browser focus follows the remote', async ({ page }) => {
+    await open(page);
+    // The remote's highlight and the browser's own focus must be the same element.
+    const focusFollows = () => page.evaluate(() => document.activeElement.classList.contains('focused'));
+    for (const key of [KEY.DOWN, KEY.UP, KEY.LEFT]) {
+        await press(page, key);
+        expect(await focusFollows()).toBe(true);
+    }
+});
+
+test('add playlist: the address field takes browser focus only on OK, so the keyboard stays shut', async ({ page }) => {
+    await open(page);
+    await page.click('#navSettings');
+    await page.locator('.setting-row', { hasText: 'Add a playlist' }).click();
+    await expect(page.locator('#screen-add')).toHaveClass(/active/);
+    const focusedOnField = () => page.evaluate(() => document.activeElement.id === 'urlInput');
+    expect(await focusedOnField()).toBe(false);
+    await press(page, KEY.OK);
+    expect(await focusedOnField()).toBe(true);
+});
+
+test('settings: a switch reports whether it is on', async ({ page }) => {
+    await open(page);
+    await page.click('#navSettings');
+    await page.locator('.settings-cat', { hasText: 'Playback' }).click();
+    const sw = page.locator('[role="switch"]', { hasText: 'Faster channel start' });
+    const drawnOn = await sw.evaluate((el) => el.querySelector('.switch').classList.contains('on'));
+    await expect(sw).toHaveAttribute('aria-checked', drawnOn ? 'true' : 'false');
+});
+
 test('live tv: the channel list shows the playlist channels and a category opens its channels', async ({ page }) => {
     await open(page);
     await expect(page.locator('.live-row')).toHaveCount(4);

@@ -298,10 +298,20 @@ html.avplay-active .favorite-btn {
 }
 
 .sidebar.collapsed .brand,
-.sidebar.collapsed .menu-sub,
+.sidebar.collapsed .menu-sub {
+	display: none;
+}
+
+/* Collapsed to icons: the labels are hidden from sight but kept for
+   assistive technology, so each icon still has a name. */
 .sidebar.collapsed .menu-label,
 .sidebar.collapsed .menu-count {
-	display: none;
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
 }
 
 .sidebar.collapsed .menu-root {

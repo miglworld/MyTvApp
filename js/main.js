@@ -370,6 +370,7 @@
             }
             var zone = this.zones[this.currentZone];
             if (zone && zone.afterApply) zone.afterApply(this.row, matrix.length);
+            syncDomFocus();
         },
 
         move: function (dir) {
@@ -406,6 +407,21 @@
             if (el) el.click();
         }
     };
+
+    // The remote's highlight is the .focused class. This also moves the
+    // browser's own focus onto that element, so assistive technology (Samsung
+    // Voice Guide) reads what the remote is on. The URL field is left alone:
+    // focusing it opens the system keyboard, which only OK may do.
+    function syncDomFocus() {
+        var marked = document.querySelectorAll('.focused');
+        var el = null;
+        for (var i = marked.length - 1; i >= 0; i--) {
+            if (marked[i] !== urlInput && marked[i].getClientRects().length) { el = marked[i]; break; }
+        }
+        if (!el || document.activeElement === el) return;
+        if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+        try { el.focus({ preventScroll: true }); } catch (e) { /* not focusable here: the highlight still shows it */ }
+    }
 
     // Left from a screen's own controls goes to the side menu, onto the entry
     // of what is showing.
@@ -931,6 +947,7 @@
             cell.className = 'guide-ch';
             var logo = document.createElement('span');
             logo.className = 'live-logo';
+            logo.setAttribute('aria-hidden', 'true');
             if (ch.logo) logo.style.backgroundImage = 'url(' + JSON.stringify(ch.logo) + ')';
             else logo.textContent = (ch.name || '?').charAt(0).toUpperCase();
             var name = document.createElement('span');
@@ -955,6 +972,9 @@
                 var prog = document.createElement('div');
                 prog.className = 'guide-cell' + (from <= now && now < to ? ' on' : '') +
                     (hasFocus && focused && r === state.guideRow && i === focused.index ? ' focused' : '');
+                prog.setAttribute('role', 'button');
+                prog.setAttribute('aria-label', [ch.name, list[i][2], guideTime(from) + ' to ' + guideTime(to),
+                    from <= now && now < to ? 'on now' : ''].filter(Boolean).join(', '));
                 prog.style.left = left + 'px';
                 prog.style.width = Math.max(6, width) + 'px';
                 // Too narrow for words: a plain block.
@@ -973,6 +993,7 @@
             frag.appendChild(row);
         }
         rowsBox.appendChild(frag);
+        syncDomFocus();
 
         // The present, as a line through all rows.
         if (now >= start && now < end) {
@@ -1077,6 +1098,7 @@
         num.textContent = ch.number ? String(ch.number) : '';
         var logo = document.createElement('span');
         logo.className = 'live-logo';
+        logo.setAttribute('aria-hidden', 'true');   // the name says the same
         if (ch.logo) logo.style.backgroundImage = 'url(' + JSON.stringify(ch.logo) + ')';
         else logo.textContent = (ch.name || '?').charAt(0).toUpperCase();
         var text = document.createElement('span');
@@ -1104,8 +1126,17 @@
             var star = document.createElement('span');
             star.className = 'live-mark';
             star.textContent = '\u2605';
+            star.setAttribute('aria-hidden', 'true');
             row.appendChild(star);
         }
+        // Read as one button: number, name, programme, and the states.
+        var spoken = [ch.number ? String(ch.number) : '', ch.name || ''];
+        if (failed) spoken.push('did not play last time');
+        else if (on && on.now) spoken.push(String(on.now[2]));
+        if (isFavorited(ch)) spoken.push('favorite');
+        row.setAttribute('role', 'button');
+        row.setAttribute('aria-label', spoken.filter(Boolean).join(', '));
+        if (state.nowPlaying && ch.url === state.nowPlaying.url) row.setAttribute('aria-current', 'true');
         return row;
     }
 
@@ -1147,6 +1178,7 @@
             frag.appendChild(buildChannelRow(list[i], i === state.liveIndex ? (hasFocus ? ' selected focused' : ' selected') : ''));
         }
         box.appendChild(frag);
+        if (hasFocus) syncDomFocus();
         updateLiveInfo();
     }
 
@@ -2235,6 +2267,8 @@
 
         btn = settingButton(row.label, row.run);
         if (row.kind === 'toggle') {
+            btn.setAttribute('role', 'switch');
+            btn.setAttribute('aria-checked', row.on ? 'true' : 'false');
             btn.appendChild(buildSwitch(row.on));
         } else {
             value = document.createElement('span');
@@ -3348,6 +3382,7 @@
             frag.appendChild(buildChannelRow(list[i], i === state.panelIndex ? ' selected focused' : ''));
         }
         box.appendChild(frag);
+        syncDomFocus();
     }
 
     function moveChannelPanel(delta) {
