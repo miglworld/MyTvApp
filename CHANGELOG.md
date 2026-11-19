@@ -2,6 +2,10 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.13.2 (dev branch, not released yet)
+- Country names are left out of channel names, such as "Portugal | RTP1" or "BBC One (United Kingdom)". The country shows as a small tag in full screen instead.
+- Faster start-up: the video library (hls.js) loads the first time a channel plays, not at start-up. Cold start in the browser test went from about 500 ms to about 400 ms.
+
 ## v0.13.1 (2026-11-19)
 Released version: v0.13.0 below plus these two changes, now on `main`.
 - Faster playlist reading: tidying channel names had made reading a 13,000-channel playlist about twice as slow. It is now close to the speed of v0.12.7 again, with the same names as before.

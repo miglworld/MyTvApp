@@ -25,12 +25,19 @@
 })(function () {
     'use strict';
 
+    // Country names that playlists put on channel names, such as "Portugal | RTP1",
+    // "BBC One (United Kingdom)" or "Scotland: BBC Alba". They are left out of the
+    // shown name and shown as a tag instead.
+    var COUNTRY_NAMES = 'Afghanistan|Albania|Algeria|Andorra|Angola|Argentina|Armenia|Australia|Austria|Azerbaijan|Bahamas|Bahrain|Bangladesh|Barbados|Belarus|Belgium|Belize|Benin|Bhutan|Bolivia|Bosnia|Botswana|Brazil|Brunei|Bulgaria|Burkina Faso|Burundi|Cambodia|Cameroon|Canada|Cape Verde|Chad|Chile|China|Colombia|Comoros|Congo|Costa Rica|Croatia|Cuba|Cyprus|Czech Republic|Czechia|Denmark|Djibouti|Dominica|Dominican Republic|Ecuador|Egypt|El Salvador|England|Equatorial Guinea|Eritrea|Estonia|Eswatini|Ethiopia|Fiji|Finland|France|Gabon|Gambia|Georgia|Germany|Ghana|Greece|Grenada|Guatemala|Guinea|Guyana|Haiti|Honduras|Hungary|Iceland|India|Indonesia|Iran|Iraq|Ireland|Israel|Italy|Ivory Coast|Jamaica|Japan|Jordan|Kazakhstan|Kenya|Kosovo|Kuwait|Kyrgyzstan|Laos|Latvia|Lebanon|Lesotho|Liberia|Libya|Liechtenstein|Lithuania|Luxembourg|Madagascar|Malawi|Malaysia|Maldives|Mali|Malta|Mauritania|Mauritius|Mexico|Moldova|Monaco|Mongolia|Montenegro|Morocco|Mozambique|Myanmar|Namibia|Nepal|Netherlands|New Zealand|Nicaragua|Niger|Nigeria|North Macedonia|Northern Ireland|Norway|Oman|Pakistan|Panama|Paraguay|Peru|Philippines|Poland|Portugal|Qatar|Romania|Russia|Rwanda|Saudi Arabia|Scotland|Senegal|Serbia|Seychelles|Sierra Leone|Singapore|Slovakia|Slovenia|Somalia|South Africa|South Korea|Spain|Sri Lanka|Sudan|Suriname|Sweden|Switzerland|Syria|Taiwan|Tajikistan|Tanzania|Thailand|Togo|Trinidad and Tobago|Tunisia|Turkey|Turkmenistan|Uganda|Ukraine|United Arab Emirates|United Kingdom|United States|Uruguay|Uzbekistan|Venezuela|Vietnam|Wales|Yemen|Zambia|Zimbabwe';
+    var countryPrefix = new RegExp('^(' + COUNTRY_NAMES + ')\\s*[|:\\-]\\s*', 'i');
+    var countryTrail = new RegExp('\\s[(\\[](' + COUNTRY_NAMES + ')[)\\]]\\s*$', 'i');
+
     // Under Node (the tests in test/) there is no page: hand out the functions
     // that do not need one and stop here.
     if (typeof document === 'undefined') {
         if (typeof module !== 'undefined') module.exports = {
             parseM3U: parseM3U, versionNewer: versionNewer, isStreamUrl: isStreamUrl, cleanUserAgent: cleanUserAgent,
-            listWindow: listWindow, guideIndexAt: guideIndexAt, isTagged: isTagged, channelTags: channelTags, ago: ago, cleanName: cleanName,
+            listWindow: listWindow, guideIndexAt: guideIndexAt, isTagged: isTagged, channelTags: channelTags, countryIn: countryIn, ago: ago, cleanName: cleanName,
             nextCopyFrom: nextCopyFrom, qualityLabel: qualityLabel, labelClashes: labelClashes,
             qrMatrix: qrMatrix, reportLink: reportLink, redactAddresses: redactAddresses,
             normalizeXtreamServer: normalizeXtreamServer, xtreamApiUrl: xtreamApiUrl, xtreamM3u: xtreamM3u,
@@ -42,7 +49,7 @@
     // ==========================================================================
     // Config / constants
     // ==========================================================================
-    var APP_VERSION = '0.13.1';
+    var APP_VERSION = '0.13.2';
     var PLAYLISTS_KEY = 'iptv_playlists';
     var ACTIVE_PLAYLISTS_KEY = 'iptv_active_playlist_id';
     var FAVORITES_KEY = 'iptv_favorites';
@@ -237,11 +244,31 @@
 
     // The playlist's marks as tags, read from the name it gave. They are
     // taken out of the name on screen and shown small in full screen.
+
+    // The country named on a channel, or '' when the name has none.
+    function countryIn(raw) {
+        var s = String(raw || '');
+        var m = countryPrefix.exec(s) || countryTrail.exec(s);
+        return m ? m[1] : '';
+    }
+
+    // A name without its country part.
+    // The two patterns are long, so each runs only when the name could match it.
+    function withoutCountry(s) {
+        s = s.trim();
+        if (s.indexOf('|') !== -1 || s.indexOf(':') !== -1 || s.indexOf('-') !== -1) s = s.replace(countryPrefix, '');
+        var last = s.charAt(s.length - 1);
+        if (last === ')' || last === ']') s = s.replace(countryTrail, '');
+        return s.trim();
+    }
+
     function channelTags(ch) {
         var raw = ch.rawName || ch.name || '';
         var tags = [];
         if (/\[\s*geo-blocked\s*\]/i.test(raw)) tags.push('Geo-blocked');
         if (/\[\s*not 24\/7\s*\]/i.test(raw)) tags.push('Not 24/7');
+        var country = countryIn(raw);
+        if (country) tags.push(country);
         return tags;
     }
 
@@ -1398,7 +1425,9 @@
         // Single spaces and no spaces at the ends, as every later step expects.
         if (s.indexOf('[') !== -1) s = withoutMarks(s);
         else s = (/\s\s|[^\S ]/.test(s) ? s.replace(/\s+/g, ' ') : s).trim();
+        s = withoutCountry(s);
         s = withoutTrailingTag(s);
+        s = withoutCountry(s);
         // Anything left to tidy? One test instead of every step for plain names.
         if (!/[|\u0080-￿]|\s\s|^[\s\-:·]|[\s\-:·]$|[([]\s*[)\]]|(^|[\s([])(FHD|UHD|HD|SD|4K|\d{3,4}p)(?=$|[\s)\]])/i.test(s)) {
             return s || String(raw || '').trim();
@@ -1407,6 +1436,7 @@
         s = s.replace(/[\uD83C-\uDBFF][\uDC00-\uDFFF]|[☀-➿]|️|‍/g, ' ');
         s = s.replace(/ᴴᴰ|ᶠᴴᴰ/g, ' ');
         s = s.replace(/(^|[\s([])(FHD|UHD|HD|SD|4K|\d{3,4}p)(?=$|[\s)\]])/gi, '$1');
+        s = withoutCountry(s);
         s = s.replace(/\(\s*\)|\[\s*\]/g, ' ');
         s = s.replace(/\s+/g, ' ').replace(/^[\s|\-:·]+|[\s|\-:·]+$/g, '');
         return s || String(raw || '').trim();
@@ -3260,7 +3290,8 @@
         logoEl.style.backgroundImage = ch.logo ? ('url(' + JSON.stringify(ch.logo) + ')') : '';
         updateFavoriteButton();
 
-        var hlsOk = !!(window.Hls && Hls.isSupported());
+        // Not loaded yet: the library is loaded when this engine is started.
+        var hlsOk = window.Hls ? Hls.isSupported() : true;
         var engines = hasAvplay ? ['avplay', 'native', 'hls'] : (isTizen ? ['native', 'hls'] : ['hls', 'native']);
         state.enginesLeft = engines.filter(function (e) { return e !== 'hls' || hlsOk; });
         state.playErrors = [];
@@ -3506,7 +3537,34 @@
         safePlay(token);
     }
 
+    // hls.js is large, so it is loaded the first time a channel needs it rather
+    // than at start-up. Calls made while it loads wait for the one load.
+    var hlsWaiting = null;
+    function loadHls(done) {
+        if (window.Hls) { done(true); return; }
+        if (hlsWaiting) { hlsWaiting.push(done); return; }
+        hlsWaiting = [done];
+        function finish(ok) {
+            var list = hlsWaiting || [];
+            hlsWaiting = null;
+            list.forEach(function (f) { f(ok && !!window.Hls); });
+        }
+        var script = document.createElement('script');
+        script.src = 'lib/hls.min.js';
+        script.onload = function () { finish(true); };
+        script.onerror = function () { finish(false); };
+        document.head.appendChild(script);
+    }
+
     function startHls(ch, token) {
+        if (!window.Hls) {
+            loadHls(function (ok) {
+                if (token !== state.playToken) return;
+                if (!ok) { engineFailed(token, 'hls: the player library did not load'); return; }
+                startHls(ch, token);
+            });
+            return;
+        }
         // Local reference: callbacks from an earlier attempt must not act on a newer one.
         var hls = new Hls({ backBufferLength: 30 });
         var networkRetries = 0;
