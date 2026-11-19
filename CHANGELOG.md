@@ -2,6 +2,14 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.13.0 (2026-11-19)
+Released version: everything from v0.12.8 to v0.12.16 below, now on `main`.
+- **Xtream Codes accounts** in Settings, Playlists: add one by server, username and password; its live channels and categories load like an M3U playlist. The password stays out of the diagnostics and Report a problem.
+- Tidier channel names: quality tags, two-letter country prefixes and emoji are left out; "[Geo-blocked]" and "[Not 24/7]" show as small tags in full screen instead. Channels with the same tidy name show their quality in brackets.
+- A channel that will not play tries the next copy of the same channel.
+- Fixed: sound with no picture when another player takes over from the Samsung player, and the Add screens hidden under the picture playing behind Settings.
+- Accessibility: Voice Guide follows the remote. The picture is dimmed behind the menu and Settings.
+
 ## v0.12.16 (dev branch, not released yet)
 - Fixed: with a channel playing behind Settings, "Add a playlist" and "Add an Xtream Codes account" seemed to do nothing. Their screen opened under the picture. It now shows above it, on a floating panel like Settings, with lighter hint text so it reads over the picture.
 
