@@ -238,7 +238,7 @@ They verify that the scripts parse, that the version is the same in all four pla
 
 1. Bump the version in **five places**, to the same value: `package.json`, `package-lock.json` (two lines at the top), `config.xml`, `APP_VERSION` in `js/main.js`, and `BUNDLED_VERSION` in `js/boot.js`.
 2. Add a line to [CHANGELOG.md](CHANGELOG.md).
-3. Optional: try it on the TV first. Push the work to the `dev` branch (`git push origin HEAD:dev --force-with-lease`), and on a TV with Developer mode on choose "Check for updates now".
+3. Optional: try it on the TV first. Push the work to the `dev` branch (`git push origin HEAD:dev`; if git refuses, fetch and merge the newer `dev` first), and on a TV with Developer mode on choose "Check for updates now".
 4. Open a pull request, wait for the check, and merge into `main`. Installed TVs update themselves on the next start. Afterwards bring `dev` level with `main` again.
 5. For a new package (first installs, or a change to `config.xml`, `js/boot.js` or `lib/hls.min.js`), build it and attach it to a GitHub release:
 
