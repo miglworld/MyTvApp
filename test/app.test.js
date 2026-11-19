@@ -361,3 +361,47 @@ test('coming back to the front checks for an update at most once a minute', func
     assert.strictEqual(app.returnCheckDue(100000, 100000 + 30000), false);
     assert.strictEqual(app.returnCheckDue(100000, 100000 + 60000), true);
 });
+
+test('reading a playlist in steps gives exactly the channels parseM3U gives', function () {
+    var lines = ['#EXTM3U'];
+    for (var i = 0; i < 23; i++) {
+        lines.push('#EXTINF:-1 tvg-id="c' + i + '" group-title="G' + (i % 3) + '",Channel ' + i + ' FHD');
+        if (i % 4 === 0) lines.push('#EXTGRP:Own group ' + i);
+        if (i % 5 === 0) lines.push('#EXTVLCOPT:http-user-agent=Agent' + i);
+        if (i % 6 === 0) lines.push('');
+        lines.push('http://example.com/' + i + '.m3u8');
+    }
+    // A broken entry, then a channel whose address is the very last line, with no newline after it.
+    lines.push('#EXTINF:-1,No address');
+    lines.push('#EXTINF:-1,Last one');
+    lines.push('http://example.com/last.m3u8');
+    var text = lines.join('\n');
+    var expected = app.parseM3U(text);
+    assert.strictEqual(expected.length, 24);
+    [1, 2, 7, 23, 24, 25, 100].forEach(function (size) {
+        var reader = app.m3uReader(text);
+        var got = [];
+        var steps = 0;
+        while (!reader.done()) {
+            var part = reader.next(size);
+            assert.ok(part.length <= size, 'a step is never longer than ' + size);
+            got = got.concat(part);
+            if (++steps > 100) assert.fail('the reader does not finish');
+        }
+        assert.deepStrictEqual(got, expected, 'chunk size ' + size);
+        assert.deepStrictEqual(reader.next(size), [], 'nothing is left after the end');
+    });
+});
+
+test('a step ends right after a channel, so #EXTGRP and #EXTVLCOPT stay with their channel', function () {
+    var text = [
+        '#EXTM3U',
+        '#EXTINF:-1,One', 'http://e/1',
+        '#EXTINF:-1,Two', '#EXTGRP:Sport', '#EXTVLCOPT:http-user-agent=Agent', 'http://e/2'
+    ].join('\n');
+    var reader = app.m3uReader(text);
+    assert.strictEqual(reader.next(1)[0].group, 'Other');
+    var two = reader.next(1)[0];
+    assert.strictEqual(two.group, 'Sport');
+    assert.strictEqual(two.userAgent, 'Agent');
+});

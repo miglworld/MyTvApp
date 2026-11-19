@@ -2,6 +2,9 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.13.9 (dev branch, not released yet)
+- Faster start with a big playlist: the first channels are drawn as soon as they are read, and the rest of the list is read in small steps afterwards, so the first screen no longer waits for all 13,000 channels to be read and sorted. The channel count, categories, copy switching, the saved last channel and number keys wait until the whole list is read. A channel name can gain its quality in brackets ("BBC One" to "BBC One (FHD)") once the whole list is read.
+
 ## v0.13.8 (dev branch, not released yet)
 - The nearly solid panels of 0.13.7 were too dark on the TV. Panels are back to the earlier glass (66% on the TV), now the same on every page, Settings and the TV Guide included. The picture behind Settings stays undimmed.
 
