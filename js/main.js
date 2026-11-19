@@ -49,7 +49,7 @@
     // ==========================================================================
     // Config / constants
     // ==========================================================================
-    var APP_VERSION = '0.13.3';
+    var APP_VERSION = '0.13.4';
     var PLAYLISTS_KEY = 'iptv_playlists';
     var ACTIVE_PLAYLISTS_KEY = 'iptv_active_playlist_id';
     var FAVORITES_KEY = 'iptv_favorites';
@@ -3346,7 +3346,7 @@
         var patience = state.playErrors.length ? FALLBACK_WATCHDOG_MS : PLAY_WATCHDOG_MS;
         state.watchdogId = setTimeout(function () {
             if (token !== state.playToken || state.isPlaying) return;
-            engineFailed(token, engineLabel(engine) + ': no video after ' + (patience / 1000) + ' s');
+            engineFailed(token, engineLabel(engine) + ': no video after ' + (patience / 1000) + ' s', engine);
         }, patience);
 
         if (engine === 'avplay') startAvplay(ch, token);
@@ -3500,7 +3500,7 @@
                 onerror: function (err) {
                     if (token !== state.playToken) return;
                     var reason = label + (err && err.name ? err.name : String(err));
-                    if (state.isPlaying) streamStopped(reason); else engineFailed(token, reason);
+                    if (state.isPlaying) streamStopped(reason); else engineFailed(token, reason, 'avplay');
                 },
                 onevent: function () { /* not used */ }
             });
@@ -3512,17 +3512,22 @@
                 if (pictureTuning) {
                     try { av.setDisplayMethod('PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO'); } catch (e) { /* older firmware */ }
                 }
-                try { av.play(); } catch (e) { engineFailed(token, label + (e.name || e)); }
+                try { av.play(); } catch (e) { engineFailed(token, label + (e.name || e), 'avplay'); }
             }, function (e) {
-                if (token === state.playToken) engineFailed(token, label + (e && e.name ? e.name : String(e)));
+                if (token === state.playToken) engineFailed(token, label + (e && e.name ? e.name : String(e)), 'avplay');
             });
         } catch (e) {
-            engineFailed(token, label + (e && e.name ? e.name : String(e)));
+            engineFailed(token, label + (e && e.name ? e.name : String(e)), 'avplay');
         }
     }
 
-    function engineFailed(token, reason) {
-        if (token !== state.playToken || state.isPlaying) return;
+    // engine: the player the failure came from. A report from a player that is
+    // no longer the current one is ignored: the Samsung player can report a
+    // second error when it is closed, and that must not cost the next player
+    // its turn.
+    function engineFailed(token, reason, engine) {
+        if (token !== state.playToken || state.isPlaying || state.playFailed) return;
+        if (engine !== state.engine) return;
         console.error('Playback engine failed:', reason);
         // A channel the list only passes over gets one line at the end, not one per player.
         if (state.fullscreen) logEvent('failed: ' + reason);
@@ -3567,7 +3572,7 @@
         if (!window.Hls) {
             loadHls(function (ok) {
                 if (token !== state.playToken) return;
-                if (!ok) { engineFailed(token, 'hls: the player library did not load'); return; }
+                if (!ok) { engineFailed(token, 'hls: the player library did not load', 'hls'); return; }
                 startHls(ch, token);
             });
             return;
@@ -3613,7 +3618,7 @@
                 showOverlay();
                 unavailableToast();
             } else {
-                engineFailed(token, 'hls.js: ' + data.details);
+                engineFailed(token, 'hls.js: ' + data.details, 'hls');
             }
         });
     }
@@ -3638,7 +3643,7 @@
             showOverlay();
             unavailableToast();
         } else {
-            engineFailed(state.playToken, reason);
+            engineFailed(state.playToken, reason, 'native');
         }
     });
     videoPlayer.addEventListener('waiting', function () {

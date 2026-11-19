@@ -287,6 +287,36 @@ test('full screen: the picture is not covered, whether the Samsung player plays 
     expect(await visibility()).toEqual({ samsung: 'hidden', video: 'visible' });
 });
 
+// Seen on a TV: the Samsung player reports a stream it cannot open, and then a
+// second error when the app closes it. The second one must not count against
+// the TV player, which comes next.
+test('playback: a late second error from the Samsung player does not skip the TV player', async ({ page }) => {
+    await open(page);
+    await page.evaluate(() => {
+        const av = window.webapis.avplay;
+        let listener = null;
+        let pendingFail = null;
+        av.setListener = (x) => { listener = x; };
+        av.prepareAsync = (ok, fail) => {
+            pendingFail = fail;
+            setTimeout(() => listener.onerror({ name: 'PLAYER_ERROR_NOT_SUPPORTED_FILE' }), 30);
+        };
+        av.close = () => {
+            const fail = pendingFail;
+            pendingFail = null;
+            if (fail) setTimeout(() => fail({ name: 'InvalidAccessError' }), 0);
+        };
+    });
+    await press(page, KEY.DOWN);
+    await press(page, KEY.OK);
+    const log = () => page.evaluate(() => JSON.parse(localStorage.getItem('iptv_log') || '[]').join('\n'));
+    await expect.poll(log, { timeout: 30000 }).toContain('could not play');
+    const line = (await log()).split('\n').filter((l) => l.indexOf('could not play') !== -1).pop();
+    expect(line).toContain('Samsung player: PLAYER_ERROR_NOT_SUPPORTED_FILE');
+    expect(line).toContain('TV player');
+    expect(line).not.toContain('InvalidAccessError');
+});
+
 // The channel keeps playing behind Settings and the Add screens. On the TV
 // the Samsung player's picture is an opaque window where its object sits; a
 // browser draws nothing there, so an opaque box in the same place stands in.
