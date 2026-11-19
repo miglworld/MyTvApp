@@ -2,6 +2,11 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.12.9 (dev branch, not released yet)
+- Accessibility: the TV's screen reader (Voice Guide) can follow the remote. The control the remote is on now also takes the browser's focus, so it is read out. Settings switches say whether they are on, channel rows and guide programmes read their name and programme, the menu's icons keep their names when the menu folds, and messages such as "Could not load" are announced.
+- The address field still opens the TV keyboard only when you press OK on it.
+- Repository: a WCAG 2.2 AA accessibility report (`ACCESSIBILITY_TEST_REPORT.md`), browser tests for the focus behaviour, and a leftover patch file removed.
+
 ## v0.12.8 (dev branch, not released yet)
 - Remote: Up and Down return to the same button after passing a shorter row. Before, the focus jumped to the first button.
 - The picture behind the side menu, Settings and Add Playlist is dimmed, so the text reads clearly. The channel list keeps the picture bright.
