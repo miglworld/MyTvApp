@@ -257,6 +257,8 @@ html:not(.avplay-active) .sidebar,
 html:not(.avplay-active) .live-channels,
 html:not(.avplay-active) .guide-panel,
 html:not(.avplay-active) .notice,
+html:not(.avplay-active) .settings-cats,
+html:not(.avplay-active) .settings-main,
 html:not(.avplay-active) .add-playlist-panel,
 html:not(.avplay-active) .channel-panel,
 html:not(.avplay-active) .modal-box,
@@ -267,16 +269,21 @@ html:not(.avplay-active) .favorite-btn {
 	backdrop-filter: blur(34px) saturate(1.7);
 }
 
+/* While the Samsung player plays, it draws the picture on its own plane under
+   the page, so the blur above cannot work. Every panel then has the same
+   firmer glass, on every page (Settings and the TV Guide included). */
 html.avplay-active .sidebar,
-html.avplay-active .live-channels,
-html.avplay-active .guide-panel,
 html.avplay-active .notice,
-html.avplay-active .add-playlist-panel,
 html.avplay-active .channel-panel,
 html.avplay-active .modal-box,
 html.avplay-active .toast,
 html.avplay-active .number-entry,
-html.avplay-active .favorite-btn {
+html.avplay-active .favorite-btn,
+html.avplay-active .live-channels,
+html.avplay-active .guide-panel,
+html.avplay-active .settings-cats,
+html.avplay-active .settings-main,
+html.avplay-active .add-playlist-panel {
 	background: rgba(22, 22, 26, 0.66);
 	background: linear-gradient(140deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.06) 26%, rgba(255, 255, 255, 0.02) 62%, rgba(255, 255, 255, 0.08) 100%), rgba(22, 22, 26, 0.66);
 }
@@ -364,8 +371,8 @@ html.avplay-active .favorite-btn {
 }
 
 /* Over the picture, under the screens and the sidebar. Fades in while the
-   menu or Settings is open, so the text and buttons read against a dark
-   background instead of moving video. */
+   menu is open, so its text and buttons read against a dark background
+   instead of moving video. Other screens use darker panels instead. */
 .video-dim {
 	position: fixed;
 	top: 0;
@@ -776,12 +783,6 @@ html.menu-dim .video-dim {
 	flex-direction: column;
 	padding: 26px 26px 16px;
 	border-radius: 38px;
-}
-
-/* A grid of text needs a calmer surface than the lists do. */
-#screen-guide .guide-panel {
-	background: rgba(18, 18, 22, 0.8);
-	background: linear-gradient(140deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 26%, rgba(255, 255, 255, 0.02) 100%), rgba(18, 18, 22, 0.8);
 }
 
 .guide-head {
@@ -1555,7 +1556,9 @@ html.video-full .sidebar {
 	align-items: flex-end;
 	justify-content: space-between;
 	padding: 56px 72px 92px;
-	background: linear-gradient(0deg, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.45) 22%, rgba(0, 0, 0, 0) 46%);
+	/* Shown only with the info: dark enough at the bottom for the grey lines
+	   and the key hints to read over a bright picture, fading out smoothly. */
+	background: linear-gradient(0deg, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.84) 22%, rgba(0, 0, 0, 0.55) 42%, rgba(0, 0, 0, 0.2) 58%, rgba(0, 0, 0, 0) 72%);
 	opacity: 0;
 	pointer-events: none;
 	transition: opacity 0.25s ease;

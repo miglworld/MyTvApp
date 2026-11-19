@@ -136,7 +136,7 @@ test('navigation: Up and Down return to the same button after a shorter row', as
 });
 
 // The picture behind the menu and Settings is dimmed; the channel list keeps it bright.
-test('dim: the picture is dimmed under the menu and Settings, not in the channel list', async ({ page }) => {
+test('dim: the picture is dimmed under the menu only, not in the channel list or Settings', async ({ page }) => {
     await open(page);
     const dimmed = () => page.evaluate(() => document.documentElement.classList.contains('menu-dim'));
     expect(await dimmed()).toBe(false);          // the channel list is up
@@ -145,8 +145,8 @@ test('dim: the picture is dimmed under the menu and Settings, not in the channel
     await press(page, KEY.RIGHT);                // back to the channel list
     expect(await dimmed()).toBe(false);
     await page.click('#navSettings');
-    expect(await dimmed()).toBe(true);
-    await page.screenshot({ path: test.info().outputPath('settings-dim.png') });
+    expect(await dimmed()).toBe(false);          // Settings: its darker panels, no dimming
+    await page.screenshot({ path: test.info().outputPath('settings-no-dim.png') });
 });
 
 test('report a problem: the drawn QR code opens a filled-in GitHub issue, with logins cut out', async ({ page }) => {
@@ -285,6 +285,36 @@ test('full screen: the picture is not covered, whether the Samsung player plays 
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('iptv_log')).join('\n'))).toContain('Samsung player: PLAYER_ERROR_CONNECTION_FAILED');
     await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains('avplay-active'))).toBe(false);
     expect(await visibility()).toEqual({ samsung: 'hidden', video: 'visible' });
+});
+
+// Seen on a TV: the Samsung player reports a stream it cannot open, and then a
+// second error when the app closes it. The second one must not count against
+// the TV player, which comes next.
+test('playback: a late second error from the Samsung player does not skip the TV player', async ({ page }) => {
+    await open(page);
+    await page.evaluate(() => {
+        const av = window.webapis.avplay;
+        let listener = null;
+        let pendingFail = null;
+        av.setListener = (x) => { listener = x; };
+        av.prepareAsync = (ok, fail) => {
+            pendingFail = fail;
+            setTimeout(() => listener.onerror({ name: 'PLAYER_ERROR_NOT_SUPPORTED_FILE' }), 30);
+        };
+        av.close = () => {
+            const fail = pendingFail;
+            pendingFail = null;
+            if (fail) setTimeout(() => fail({ name: 'InvalidAccessError' }), 0);
+        };
+    });
+    await press(page, KEY.DOWN);
+    await press(page, KEY.OK);
+    const log = () => page.evaluate(() => JSON.parse(localStorage.getItem('iptv_log') || '[]').join('\n'));
+    await expect.poll(log, { timeout: 30000 }).toContain('could not play');
+    const line = (await log()).split('\n').filter((l) => l.indexOf('could not play') !== -1).pop();
+    expect(line).toContain('Samsung player: PLAYER_ERROR_NOT_SUPPORTED_FILE');
+    expect(line).toContain('TV player');
+    expect(line).not.toContain('InvalidAccessError');
 });
 
 // The channel keeps playing behind Settings and the Add screens. On the TV
@@ -672,4 +702,201 @@ test('xtream: a wrong password says so, and the password is not shown or kept in
     await expect(page.locator('#toast')).toContainText('did not accept the username or password');
     expect(await page.evaluate(() => document.body.innerText)).not.toContain('Wr0ng-Pass9');
     expect(await page.evaluate(() => localStorage.getItem('iptv_log') || '')).not.toContain('Wr0ng-Pass9');
+});
+
+// An app error offers to report it, once per start, in the update notice's corner.
+test('report notice: an app error offers a report once, and Report opens Report a problem', async ({ page }) => {
+    await open(page);
+    await expect(page.locator('#reportNotice')).toBeHidden();
+    await page.evaluate(() => window.MYTVAPP_ERROR('test failure'));
+    await expect(page.locator('#reportNotice')).toBeVisible();
+    await expect(page.locator('#reportNowBtn')).toHaveClass(/focused/);
+    await press(page, KEY.OK);
+    expect(await activeScreen(page)).toBe('screen-settings');
+    await expect(page.locator('.report-layout')).toBeVisible();
+    await expect(page.locator('#reportNotice')).toBeHidden();
+
+    // A second error in the same start does not ask again.
+    await press(page, KEY.BACK);
+    await page.evaluate(() => window.MYTVAPP_ERROR('second failure'));
+    await page.waitForTimeout(800);
+    await expect(page.locator('#reportNotice')).toBeHidden();
+});
+
+test('report notice: waits while a channel is full screen, and Back means Not now', async ({ page }) => {
+    await open(page);
+    await press(page, KEY.OK);
+    await expect(page.locator('#screen-player')).toHaveClass(/active/);
+    await page.evaluate(() => window.MYTVAPP_ERROR('error while watching'));
+    await page.waitForTimeout(400);
+    await expect(page.locator('#reportNotice')).toBeHidden();
+
+    await press(page, KEY.BACK);   // leave full screen
+    await expect(page.locator('#reportNotice')).toBeVisible();
+    await press(page, KEY.BACK);   // Not now
+    await expect(page.locator('#reportNotice')).toBeHidden();
+    expect(await activeScreen(page)).toBe('screen-live');
+});
+
+// The dark shade behind the full-screen info is part of the info: it shows
+// with it and goes with it, so the picture is clear the rest of the time.
+test('full screen: the dark shade shows only while the channel info is on screen', async ({ page }) => {
+    await open(page);
+    await press(page, KEY.OK);
+    await expect(page.locator('#screen-player')).toHaveClass(/active/);
+    const shade = () => page.evaluate(() => {
+        const o = document.getElementById('playerOverlay');
+        const cs = getComputedStyle(o);
+        return { visible: o.classList.contains('visible'), opacity: cs.opacity, gradient: cs.backgroundImage.indexOf('linear-gradient') !== -1 };
+    });
+    await press(page, KEY.RIGHT);   // the info bar
+    await expect.poll(shade).toEqual({ visible: true, opacity: '1', gradient: true });
+    // The info hides by itself a few seconds after the picture plays; the shade goes with it.
+    await expect.poll(shade, { timeout: 15000 }).toEqual({ visible: false, opacity: '0', gradient: true });
+});
+
+// Settings floats on the same glass as the other screens, whether the Samsung
+// player is drawing the picture behind it or not.
+test('settings: its panels have the same glass as the channel list and the guide', async ({ page }) => {
+    await open(page);
+    const glass = (sel) => page.evaluate((s) => {
+        const cs = getComputedStyle(document.querySelector(s));
+        return { background: cs.backgroundImage + ' ' + cs.backgroundColor, blur: cs.backdropFilter || cs.webkitBackdropFilter || '' };
+    }, sel);
+    for (const samsungPlayer of [true, false]) {
+        await page.evaluate((on) => document.documentElement.classList.toggle('avplay-active', on), samsungPlayer);
+        const list = await glass('.live-channels');
+        expect(await glass('.settings-main')).toEqual(list);
+        expect(await glass('.settings-cats')).toEqual(list);
+        expect(await glass('.guide-panel')).toEqual(list);
+        expect(await glass('.add-playlist-panel')).toEqual(list);
+    }
+});
+
+// A big playlist: the first channels are drawn at once and the rest is read in
+// steps. The count, categories and the saved last channel wait for the whole list.
+test('a big playlist: first rows first, then the full count, all categories and a last channel beyond the first step', async ({ page }) => {
+    const COUNT = 3000;
+    const lines = ['#EXTM3U'];
+    for (let i = 0; i < COUNT; i++) {
+        lines.push(`#EXTINF:-1 tvg-id="Big${i}" group-title="Group ${i % 40}",Big Channel ${i}`);
+        lines.push(`https://stream.example.invalid/big/${i}.m3u8`);
+    }
+    const last = 2500;   // far beyond the first channels read
+    await page.addInitScript((saved) => {
+        localStorage.setItem('iptv_last_channel', JSON.stringify(saved));
+        // Every text the channel count has shown, to see it is never a partial number.
+        window.__counts = [];
+        const watch = () => {
+            const el = document.getElementById('liveCount');
+            if (!el) return setTimeout(watch, 0);
+            new MutationObserver(() => window.__counts.push(el.textContent)).observe(el, { childList: true, characterData: true, subtree: true });
+        };
+        watch();
+    }, { url: `https://stream.example.invalid/big/${last}.m3u8`, name: `Big Channel ${last}`, group: `Group ${last % 40}`, playlistId: 'pl_e2e', context: 'category' });
+    const { errors } = await open(page, { routes: { 'https://example.com/playlists/demo.m3u': { status: 200, type: 'audio/x-mpegurl', body: lines.join('\n') } } });
+    // The channel count in the menu appears only with the whole list.
+    await expect(page.locator('#navAllCount')).toHaveText(String(COUNT), { timeout: 15000 });
+    expect(await page.locator('#menuCategories .menu-item').count()).toBe(40);
+    // The saved channel is found in its category and the list stands on it.
+    await expect(page.locator('.live-row.selected')).toContainText(`Big Channel ${last}`, { timeout: 15000 });
+    await expect(page.locator('#liveTitle')).toHaveText(`Group ${last % 40}`);
+    const counts = await page.evaluate(() => window.__counts);
+    for (const c of counts) expect([''].concat([`${COUNT / 40} channels`]), 'channel count shown at start').toContain(c);
+    expect(errors, 'page errors').toEqual([]);
+});
+
+// ----- The start-up reading window -----------------------------------------------
+// The app draws the first channels, then reads the rest in steps. These tests
+// hold the reading steps (the app's readMore) until they release them, so the
+// window that lasts under a second on a real start stays open for the test.
+const holdReading = () => {
+    const realSetTimeout = window.setTimeout;
+    const held = [];
+    let holding = true;
+    window.setTimeout = function (fn) {
+        if (holding && typeof fn === 'function' && fn.name === 'readMore') { held.push(fn); return 0; }
+        return realSetTimeout.apply(window, arguments);
+    };
+    window.__heldReads = () => held.length;
+    window.__releaseReading = () => { holding = false; held.splice(0).forEach((fn) => realSetTimeout(fn, 0)); };
+};
+
+function bigPlaylist(count, prefix, tagFirst) {
+    const lines = ['#EXTM3U'];
+    for (let i = 0; i < count; i++) {
+        const tag = i < (tagFirst || 0) ? ' [Geo-blocked]' : '';
+        lines.push(`#EXTINF:-1 tvg-id="${prefix}${i}" group-title="Group ${i % 40}",${prefix} Channel ${i}${tag}`);
+        lines.push(`https://stream.example.invalid/${prefix}/${i}.m3u8`);
+    }
+    return lines.join('\n');
+}
+const m3u = (body) => ({ status: 200, type: 'audio/x-mpegurl', body });
+
+test('reading window: with tagged channels hidden and only tagged ones among the first, the list says it is reading, never "No channels yet"', async ({ page }) => {
+    await page.addInitScript(holdReading);
+    await page.addInitScript(() => localStorage.setItem('iptv_tagged_channels', 'hide'));
+    const { errors } = await open(page, { noChannels: true, routes: { 'https://example.com/playlists/demo.m3u': m3u(bigPlaylist(3000, 'Big', 400)) } });
+    await expect.poll(() => page.evaluate(() => window.__heldReads())).toBe(1);
+    await expect(page.locator('#liveList .empty-hint')).toHaveText('Reading the channels…');
+    await page.evaluate(() => window.__releaseReading());
+    await expect(page.locator('#navAllCount')).toHaveText('2600', { timeout: 15000 });
+    await expect(page.locator('.live-row').first()).toContainText('Big Channel 400');
+    expect(errors, 'page errors').toEqual([]);
+});
+
+test('reading window: hiding tagged channels or switching off a playlist keeps the channels read so far on screen', async ({ page }) => {
+    await page.addInitScript(holdReading);
+    await page.addInitScript(() => {
+        if (localStorage.getItem('e2e_seeded')) return;
+        localStorage.setItem('e2e_seeded', '1');
+        localStorage.setItem('iptv_playlists', JSON.stringify([
+            { id: 'pl_a', name: 'Big A', url: 'https://example.com/playlists/demo.m3u' },
+            { id: 'pl_b', name: 'Big B', url: 'https://example.com/playlists/two.m3u' },
+        ]));
+        localStorage.setItem('iptv_active_playlist_id', JSON.stringify(['pl_a', 'pl_b']));
+        localStorage.setItem('iptv_auto_update', '0');
+        localStorage.setItem('iptv_fast_start', '1');
+    });
+    const { errors } = await open(page, { routes: {
+        'https://example.com/playlists/demo.m3u': m3u(bigPlaylist(3000, 'Alpha', 0)),
+        'https://example.com/playlists/two.m3u': m3u(bigPlaylist(3000, 'Beta', 0)),
+    } });
+    await expect.poll(() => page.evaluate(() => window.__heldReads())).toBe(1);
+
+    // Hidden tagged channels: none is tagged, so the same channels stay.
+    await page.click('#navSettings');
+    await page.locator('.settings-cat', { hasText: 'Channels' }).click();
+    await page.locator('.setting-line', { hasText: 'Geo-blocked' }).locator('button').first().click();
+    expect(await page.evaluate(() => localStorage.getItem('iptv_tagged_channels'))).toBe('hide');
+    // Playlist B switched off while it is still being read.
+    await page.locator('.settings-cat', { hasText: 'Playlists' }).click();
+    const lineB = page.locator('.setting-playlist', { hasText: 'Big B' });
+    await expect(lineB).not.toContainText('channels');   // no count of the first channels
+    await lineB.click();
+    await expect(lineB.locator('.switch')).not.toHaveClass(/\bon\b/);
+
+    await page.click('#navLive');
+    await expect(page.locator('.live-row').first()).toContainText('Alpha Channel 0');
+    await expect(page.locator('#liveList')).not.toContainText('Beta Channel');
+
+    await page.evaluate(() => window.__releaseReading());
+    await expect(page.locator('#navAllCount')).toHaveText('3000', { timeout: 15000 });
+    await expect(page.locator('#liveList')).not.toContainText('Beta Channel');
+    expect(errors, 'page errors').toEqual([]);
+});
+
+test('reading window: a channel moved to before the reading ends is kept, not replaced by the saved last channel', async ({ page }) => {
+    await page.addInitScript(holdReading);
+    await page.addInitScript((saved) => localStorage.setItem('iptv_last_channel', JSON.stringify(saved)),
+        { url: 'https://stream.example.invalid/Big/2500.m3u8', name: 'Big Channel 2500', group: 'Group 20', playlistId: 'pl_e2e', context: 'category' });
+    const { errors } = await open(page, { routes: { 'https://example.com/playlists/demo.m3u': m3u(bigPlaylist(3000, 'Big', 0)) } });
+    await expect.poll(() => page.evaluate(() => window.__heldReads())).toBe(1);
+    await press(page, KEY.DOWN);
+    await expect(page.locator('.live-row.selected')).toContainText('Big Channel 1');
+    await page.evaluate(() => window.__releaseReading());
+    await expect(page.locator('#navAllCount')).toHaveText('3000', { timeout: 15000 });
+    await expect(page.locator('.live-row.selected')).toContainText('Big Channel 1');
+    await expect(page.locator('.live-row.selected')).not.toContainText('Big Channel 10');
+    expect(errors, 'page errors').toEqual([]);
 });

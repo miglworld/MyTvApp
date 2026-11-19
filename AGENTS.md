@@ -69,10 +69,13 @@ MyTvApp is a Samsung Tizen TV IPTV app.
     the owner and the result they should see.
 15. **Speed budgets.** Launch until the first channel is drawn: 500 ms or less.
     A key press or screen change: 300 ms or less. They are measured in
-    Chromium with the CPU slowed six times and a 13,000-channel playlist, by
-    the browser test `e2e/budget.spec.js`. CI runs it once that test is merged;
-    until then it is on the `perf/budget-gate` branch. If a budget fails,
-    refactor the slow code; do not raise the limit.
+    Chromium with a 13,000-channel playlist, by the browser test
+    `e2e/budget.spec.js`, which CI runs on every push. The CPU is slowed to one
+    fixed speed on every machine: the owner's Mac slowed six times. The test
+    times a short workload first and scales the slowdown to match, so a slower
+    machine is slowed less and a faster one more, never below real speed. The
+    reference time in that test changes only with the owner's yes. If a budget
+    fails, refactor the slow code; do not raise the limit.
 
 ## App design and code
 

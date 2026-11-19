@@ -1,25 +1,41 @@
 # MyTvApp
 
+The IPTV player for Samsung Tizen TVs: your M3U playlists, the TV remote, and updates from GitHub.
+
+[![Latest release](https://img.shields.io/github/v/release/miglworld/MyTvApp?label=release)](https://github.com/miglworld/MyTvApp/releases/latest) ![Platform: Samsung Tizen](https://img.shields.io/badge/platform-Samsung%20Tizen-1428A0) [![Check](https://github.com/miglworld/MyTvApp/actions/workflows/check.yml/badge.svg?branch=main)](https://github.com/miglworld/MyTvApp/actions/workflows/check.yml) [![CodeQL](https://github.com/miglworld/MyTvApp/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/miglworld/MyTvApp/actions/workflows/codeql.yml) ![Licence: all rights reserved](https://img.shields.io/badge/licence-all%20rights%20reserved-lightgrey)
+
 A live TV player for Samsung Smart TVs. It plays the channels of your M3U playlists, shows what is on now and next, and is driven entirely with the TV remote.
 
 ![Live TV: the channel plays behind a floating channel list and its caption](docs/images/live.jpg)
 
 **[Download the latest package](https://github.com/miglworld/MyTvApp/releases/latest)** · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Why it is built this way](docs/decisions.md)
 
+**Status:** used by its owner on a real Samsung TV. Each release is tested on the TV on `dev` before it reaches `main`.
+
+Licence: all rights reserved. See [LICENSE](LICENSE).
+
 > The screenshots use a demo playlist with invented channels and programmes, and a drawn picture in place of video.
 
 ## Contents
 
 - [What it does](#what-it-does)
+- [What it does not do](#what-it-does-not-do)
 - [A tour of the app](#a-tour-of-the-app)
 - [Remote keys](#remote-keys)
 - [Installing](#installing)
 - [Updates](#updates)
+- [Troubleshooting](#troubleshooting)
 - [Programme guide](#programme-guide)
 - [Development](#development)
 - [Credits and license](#credits-and-license)
 
+> Looking for an M3U player for your Samsung TV? MyTvApp plays playlists you already have, with the remote. It does not provide channels or playlists.
+
 ## What it does
+
+No accounts, no sign-up, no analytics. The app contacts only your playlist servers, GitHub (for updates and the programme guide) and iptv-org (for the two preset playlists).
+
+Checked by the project's own tools: 121 automated tests (unit, integration and browser), and a benchmark that parses a 13,000-channel playlist ([perf/bench.js](perf/bench.js)). Run them with `npm test` and `npx playwright test`.
 
 | | |
 |---|---|
@@ -29,8 +45,15 @@ A live TV player for Samsung Smart TVs. It plays the channels of your M3U playli
 | **Now and next** | The programme that is on, its times, progress and description, in the list, the caption and the full-screen bar. |
 | **Favorites** | Star a channel; favorites have their own list. |
 | **Three players** | Samsung's own player first, then the browser's, then [hls.js](https://github.com/video-dev/hls.js/). If one cannot show a channel, the next is tried. |
-| **Self-update** | The app downloads new versions from this repository and asks before installing them. A version that does not start is discarded. |
+| **Self-update** | The app downloads new versions from this repository and asks before installing them. |
 | **Made for the remote** | Arrow keys, OK and Back everywhere, plus channel up/down, number keys, previous channel and play/pause. |
+
+## What it does not do
+
+- It plays live channels from M3U playlists and Xtream Codes accounts. It has no movie or series library.
+- It cannot record, and it has no catch-up or replay of past programmes.
+- It cannot play streams protected with DRM (such as ClearKey or Widevine), or MPEG-DASH streams.
+- It shows no subtitles or captions. Channels are not checked for HDR or Dolby formats.
 
 ## A tour of the app
 
@@ -190,6 +213,13 @@ The TV does not read a full programme guide itself: one country's guide is tens 
 - The guide data comes from a third-party feed (iptv-epg.org at present) and is republished here in trimmed form. A channel the feed does not cover has no guide, and only playlists in `guide/config.json` get one.
 - To build it by hand: `node scripts/build-guide.js out/guide.json`. To run the job now: `gh workflow run guide.yml`.
 
+## Troubleshooting
+
+- **A channel does not play.** Channels that failed last time are shown darker. If the channel has another copy in the same playlist, the app tries it automatically. The stream itself may be offline or blocked in your country, which is common with free playlists.
+- **A new version does not appear.** Open Settings, Updates and choose "Check for updates now". A version that does not start is discarded, and the installed version keeps running.
+- **Installing fails with "Author certificate not match".** The TV already has a copy signed with another certificate. Uninstall it first, then install again.
+- **Something went wrong on the screen.** The error is shown in a red box at the bottom and kept under Settings, About. A "Something went wrong" notice in the corner also offers **Report**, which opens Report a problem with its QR code.
+
 ## Development
 
 ### Project structure
@@ -228,9 +258,9 @@ They verify that the scripts parse, that the version is the same in all four pla
 
 ### Releasing a change
 
-1. Bump the version in **four places**, to the same value: `package.json`, `config.xml`, `APP_VERSION` in `js/main.js`, and `BUNDLED_VERSION` in `js/boot.js`.
+1. Bump the version in **five places**, to the same value: `package.json`, `package-lock.json` (two lines at the top), `config.xml`, `APP_VERSION` in `js/main.js`, and `BUNDLED_VERSION` in `js/boot.js`.
 2. Add a line to [CHANGELOG.md](CHANGELOG.md).
-3. Optional: try it on the TV first. Push the work to the `dev` branch (`git push origin HEAD:dev --force-with-lease`), and on a TV with Developer mode on choose "Check for updates now".
+3. Optional: try it on the TV first. Push the work to the `dev` branch (`git push origin HEAD:dev`; if git refuses, fetch and merge the newer `dev` first), and on a TV with Developer mode on choose "Check for updates now".
 4. Open a pull request, wait for the check, and merge into `main`. Installed TVs update themselves on the next start. Afterwards bring `dev` level with `main` again.
 5. For a new package (first installs, or a change to `config.xml`, `js/boot.js` or `lib/hls.min.js`), build it and attach it to a GitHub release:
 

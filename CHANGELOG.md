@@ -2,6 +2,41 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.13.10 (dev branch, not released yet)
+- Fixed three problems in the short time at start while a big playlist is still being read:
+  - Switching a playlist on or off, or hiding tagged channels, in that time no longer empties the channel list until the reading ends. The channels read so far stay on screen, and a playlist switched off stops being read.
+  - A channel you move to in that time is kept. The saved last channel no longer replaces it when the reading ends.
+  - With tagged channels hidden and only tagged ones among the first channels, the list says "Reading the channels…" instead of "No channels yet" for a moment.
+- Settings shows a playlist's channel count only once its whole list is read.
+
+## v0.13.9 (dev branch, not released yet)
+- Faster start with a big playlist: the first channels are drawn as soon as they are read, and the rest of the list is read in small steps afterwards, so the first screen no longer waits for all 13,000 channels to be read and sorted. The channel count, categories, copy switching, the saved last channel and number keys wait until the whole list is read. A channel name can gain its quality in brackets ("BBC One" to "BBC One (FHD)") once the whole list is read.
+
+## v0.13.8 (dev branch, not released yet)
+- The nearly solid panels of 0.13.7 were too dark on the TV. Panels are back to the earlier glass (66% on the TV), now the same on every page, Settings and the TV Guide included. The picture behind Settings stays undimmed.
+
+## v0.13.7 (dev branch, not released yet)
+- One panel look on every page: the channel list, TV Guide, Settings and the Add screens share the same darker glass. Settings was lighter than the rest and let the picture tint it.
+- On the TV, while the Samsung player shows the picture, every panel (and the menu, notices and toasts) is nearly solid. The TV showed see-through panels much lighter than they are, with a lavender wash.
+- The picture behind Settings and the Add screens is no longer dimmed; their darker panels keep the text readable. Only the menu still dims the picture.
+
+## v0.13.6 (dev branch, not released yet)
+- Tests: the speed budget test slows every machine to the same reference speed (the owner's Mac slowed six times), measured by a short workload first, so a slower GitHub runner is not judged more harshly. The 500 ms and 300 ms limits are unchanged.
+- Full screen: a darker, taller shade rises from the bottom while the channel info is on screen, so its text and the key hints read over a bright picture. It goes when the info does.
+
+## v0.13.5 (dev branch, not released yet)
+- When the app hits an error, a notice in the corner offers to report it: **Report** opens Settings, Report a problem, with its QR code. It asks once per start and waits while a channel is full screen. A channel that does not play does not ask.
+
+## v0.13.4 (dev branch, not released yet)
+- Fixed: when the Samsung player could not open a channel, a second error it sent while closing made the app skip the TV player and go straight to hls.js. The TV player now gets its turn.
+
+## v0.13.3 (dev branch, not released yet)
+- Coming back to the front (from Home or another app) checks for an update, at most once a minute.
+
+## v0.13.2 (dev branch, not released yet)
+- Country names are left out of channel names, such as "Portugal | RTP1" or "BBC One (United Kingdom)". The country shows as a small tag in full screen instead.
+- Faster start-up: the video library (hls.js) loads the first time a channel plays, not at start-up. Cold start in the browser test went from about 500 ms to about 400 ms.
+
 ## v0.13.1 (2026-11-19)
 Released version: v0.13.0 below plus these two changes, now on `main`.
 - Faster playlist reading: tidying channel names had made reading a 13,000-channel playlist about twice as slow. It is now close to the speed of v0.12.7 again, with the same names as before.

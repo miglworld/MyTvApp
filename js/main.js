@@ -25,13 +25,20 @@
 })(function () {
     'use strict';
 
+    // Country names that playlists put on channel names, such as "Portugal | RTP1",
+    // "BBC One (United Kingdom)" or "Scotland: BBC Alba". They are left out of the
+    // shown name and shown as a tag instead.
+    var COUNTRY_NAMES = 'Afghanistan|Albania|Algeria|Andorra|Angola|Argentina|Armenia|Australia|Austria|Azerbaijan|Bahamas|Bahrain|Bangladesh|Barbados|Belarus|Belgium|Belize|Benin|Bhutan|Bolivia|Bosnia|Botswana|Brazil|Brunei|Bulgaria|Burkina Faso|Burundi|Cambodia|Cameroon|Canada|Cape Verde|Chad|Chile|China|Colombia|Comoros|Congo|Costa Rica|Croatia|Cuba|Cyprus|Czech Republic|Czechia|Denmark|Djibouti|Dominica|Dominican Republic|Ecuador|Egypt|El Salvador|England|Equatorial Guinea|Eritrea|Estonia|Eswatini|Ethiopia|Fiji|Finland|France|Gabon|Gambia|Georgia|Germany|Ghana|Greece|Grenada|Guatemala|Guinea|Guyana|Haiti|Honduras|Hungary|Iceland|India|Indonesia|Iran|Iraq|Ireland|Israel|Italy|Ivory Coast|Jamaica|Japan|Jordan|Kazakhstan|Kenya|Kosovo|Kuwait|Kyrgyzstan|Laos|Latvia|Lebanon|Lesotho|Liberia|Libya|Liechtenstein|Lithuania|Luxembourg|Madagascar|Malawi|Malaysia|Maldives|Mali|Malta|Mauritania|Mauritius|Mexico|Moldova|Monaco|Mongolia|Montenegro|Morocco|Mozambique|Myanmar|Namibia|Nepal|Netherlands|New Zealand|Nicaragua|Niger|Nigeria|North Macedonia|Northern Ireland|Norway|Oman|Pakistan|Panama|Paraguay|Peru|Philippines|Poland|Portugal|Qatar|Romania|Russia|Rwanda|Saudi Arabia|Scotland|Senegal|Serbia|Seychelles|Sierra Leone|Singapore|Slovakia|Slovenia|Somalia|South Africa|South Korea|Spain|Sri Lanka|Sudan|Suriname|Sweden|Switzerland|Syria|Taiwan|Tajikistan|Tanzania|Thailand|Togo|Trinidad and Tobago|Tunisia|Turkey|Turkmenistan|Uganda|Ukraine|United Arab Emirates|United Kingdom|United States|Uruguay|Uzbekistan|Venezuela|Vietnam|Wales|Yemen|Zambia|Zimbabwe';
+    var countryPrefix = new RegExp('^(' + COUNTRY_NAMES + ')\\s*[|:\\-]\\s*', 'i');
+    var countryTrail = new RegExp('\\s[(\\[](' + COUNTRY_NAMES + ')[)\\]]\\s*$', 'i');
+
     // Under Node (the tests in test/) there is no page: hand out the functions
     // that do not need one and stop here.
     if (typeof document === 'undefined') {
         if (typeof module !== 'undefined') module.exports = {
-            parseM3U: parseM3U, versionNewer: versionNewer, isStreamUrl: isStreamUrl, cleanUserAgent: cleanUserAgent,
-            listWindow: listWindow, guideIndexAt: guideIndexAt, isTagged: isTagged, channelTags: channelTags, ago: ago, cleanName: cleanName,
-            nextCopyFrom: nextCopyFrom, qualityLabel: qualityLabel, labelClashes: labelClashes,
+            parseM3U: parseM3U, m3uReader: m3uReader, versionNewer: versionNewer, isStreamUrl: isStreamUrl, cleanUserAgent: cleanUserAgent,
+            listWindow: listWindow, guideIndexAt: guideIndexAt, isTagged: isTagged, channelTags: channelTags, countryIn: countryIn, ago: ago, cleanName: cleanName,
+            nextCopyFrom: nextCopyFrom, qualityLabel: qualityLabel, labelClashes: labelClashes, returnCheckDue: returnCheckDue,
             qrMatrix: qrMatrix, reportLink: reportLink, redactAddresses: redactAddresses,
             normalizeXtreamServer: normalizeXtreamServer, xtreamApiUrl: xtreamApiUrl, xtreamM3u: xtreamM3u,
             playlistAddress: playlistAddress, redactLogins: redactLogins
@@ -42,7 +49,7 @@
     // ==========================================================================
     // Config / constants
     // ==========================================================================
-    var APP_VERSION = '0.13.1';
+    var APP_VERSION = '0.13.10';
     var PLAYLISTS_KEY = 'iptv_playlists';
     var ACTIVE_PLAYLISTS_KEY = 'iptv_active_playlist_id';
     var FAVORITES_KEY = 'iptv_favorites';
@@ -122,6 +129,10 @@
     var GUIDE_STEP_MIN = 30;
     var GUIDE_ROW_H = 80;
     var PREVIEW_DELAY_MS = 700;
+    // Start-up reads a playlist in steps: this many channels before the first
+    // screen is drawn, then this many per step.
+    var FIRST_CHANNELS = 400;
+    var CHUNK_CHANNELS = 2000;
 
     // Playback error handling limits — a dead stream gives up with a message
     // instead of retrying forever.
@@ -144,6 +155,7 @@
         playlists: [],
         activePlaylistIds: [],
         channels: [],
+        partial: false,          // start-up: only the first channels are read; the full list follows
         channelsByPlaylist: {},  // playlist id -> its channels (active playlists only)
         categories: [],          // [{ name, code, channels: [...] }] — grouped by group-title
         section: { type: 'all' }, // what the Live TV list shows: all | favorites | category (+ index)
@@ -237,11 +249,31 @@
 
     // The playlist's marks as tags, read from the name it gave. They are
     // taken out of the name on screen and shown small in full screen.
+
+    // The country named on a channel, or '' when the name has none.
+    function countryIn(raw) {
+        var s = String(raw || '');
+        var m = countryPrefix.exec(s) || countryTrail.exec(s);
+        return m ? m[1] : '';
+    }
+
+    // A name without its country part.
+    // The two patterns are long, so each runs only when the name could match it.
+    function withoutCountry(s) {
+        s = s.trim();
+        if (s.indexOf('|') !== -1 || s.indexOf(':') !== -1 || s.indexOf('-') !== -1) s = s.replace(countryPrefix, '');
+        var last = s.charAt(s.length - 1);
+        if (last === ')' || last === ']') s = s.replace(countryTrail, '');
+        return s.trim();
+    }
+
     function channelTags(ch) {
         var raw = ch.rawName || ch.name || '';
         var tags = [];
         if (/\[\s*geo-blocked\s*\]/i.test(raw)) tags.push('Geo-blocked');
         if (/\[\s*not 24\/7\s*\]/i.test(raw)) tags.push('Not 24/7');
+        var country = countryIn(raw);
+        if (country) tags.push(country);
         return tags;
     }
 
@@ -362,6 +394,8 @@
             // Kept on its own as well: the list above is short and moves on.
             writeStored(LAST_ERROR_KEY, new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC \u00b7 ' + APP_VERSION + ' \u00b7 ' + String(text).slice(0, 200));
             showError(text);
+            // Later, so an error during start-up does not run code that is not set up yet.
+            setTimeout(function () { try { offerReport(); } catch (e) { /* the app did not start */ } }, 0);
         };
         window.MYTVAPP_ERROR.logged = true;
     }
@@ -398,7 +432,7 @@
         setZone: function (name, row, col) {
             // The menu folds into a small capsule while the remote is elsewhere
             // (a dialog leaves it as it was).
-            if (name !== 'confirmActions' && name !== 'updateNotice') {
+            if (name !== 'confirmActions' && name !== 'updateNotice' && name !== 'reportNotice') {
                 document.getElementById('sidebar').classList.toggle('collapsed', name !== 'sideMenu');
             }
             this.currentZone = name;
@@ -562,12 +596,11 @@
         syncMenuDim();
     }
 
-    // Dims the picture behind the menu and behind Settings and Add Playlist,
-    // so their text reads clearly. The channel list keeps the picture bright.
+    // Dims the picture behind the menu, so its text reads clearly. Settings,
+    // Add Playlist and the channel list keep the picture bright: their panels
+    // are dark enough on their own.
     function syncMenuDim() {
-        var screen = activeScreenId();
-        var on = Focus.currentZone === 'sideMenu' || screen === 'screen-settings' || screen === 'screen-add';
-        document.documentElement.classList.toggle('menu-dim', on);
+        document.documentElement.classList.toggle('menu-dim', Focus.currentZone === 'sideMenu');
     }
 
     function activeScreenId() {
@@ -736,8 +769,10 @@
     }
 
     function updateMenuCounts() {
-        document.getElementById('navLiveCount').textContent = state.channels.length || '';
-        document.getElementById('navAllCount').textContent = state.channels.length || '';
+        // Empty until the whole list is read: never a count of the first channels.
+        var total = state.partial ? '' : (state.channels.length || '');
+        document.getElementById('navLiveCount').textContent = total;
+        document.getElementById('navAllCount').textContent = total;
         document.getElementById('navFavoritesCount').textContent = visibleFavorites().length || '';
     }
 
@@ -1215,7 +1250,8 @@
         state.liveIndex = idx;
         var n = state.liveList.length;
         document.getElementById('liveTitle').textContent = sectionTitle(state.section);
-        document.getElementById('liveCount').textContent = n + (n === 1 ? ' channel' : ' channels');
+        // Empty until the whole list is read: never a count of the first channels.
+        document.getElementById('liveCount').textContent = (state.partial && state.section.type !== 'favorites') ? '' : n + (n === 1 ? ' channel' : ' channels');
         renderLiveList();
     }
 
@@ -1228,7 +1264,7 @@
             hint.className = 'empty-hint';
             hint.textContent = state.section.type === 'favorites'
                 ? 'No favorites yet. Press ▶ on a channel to add it.'
-                : 'No channels yet. Add or switch on a playlist in Settings.';
+                : (state.partial ? 'Reading the channels…' : 'No channels yet. Add or switch on a playlist in Settings.');
             box.appendChild(hint);
             updateLiveInfo();
             return;
@@ -1398,7 +1434,9 @@
         // Single spaces and no spaces at the ends, as every later step expects.
         if (s.indexOf('[') !== -1) s = withoutMarks(s);
         else s = (/\s\s|[^\S ]/.test(s) ? s.replace(/\s+/g, ' ') : s).trim();
+        s = withoutCountry(s);
         s = withoutTrailingTag(s);
+        s = withoutCountry(s);
         // Anything left to tidy? One test instead of every step for plain names.
         if (!/[|\u0080-￿]|\s\s|^[\s\-:·]|[\s\-:·]$|[([]\s*[)\]]|(^|[\s([])(FHD|UHD|HD|SD|4K|\d{3,4}p)(?=$|[\s)\]])/i.test(s)) {
             return s || String(raw || '').trim();
@@ -1407,18 +1445,32 @@
         s = s.replace(/[\uD83C-\uDBFF][\uDC00-\uDFFF]|[☀-➿]|️|‍/g, ' ');
         s = s.replace(/ᴴᴰ|ᶠᴴᴰ/g, ' ');
         s = s.replace(/(^|[\s([])(FHD|UHD|HD|SD|4K|\d{3,4}p)(?=$|[\s)\]])/gi, '$1');
+        s = withoutCountry(s);
         s = s.replace(/\(\s*\)|\[\s*\]/g, ' ');
         s = s.replace(/\s+/g, ' ').replace(/^[\s|\-:·]+|[\s|\-:·]+$/g, '');
         return s || String(raw || '').trim();
     }
 
-    function parseM3U(text) {
+    // Reads a playlist a few channels at a time, so the first screen can be
+    // drawn before the whole list is read. next(max) returns the next `max`
+    // channels (all that are left when max is 0) and remembers where it stopped.
+    // It stops only right after a channel is complete, so an #EXTGRP or
+    // #EXTVLCOPT line is never split from its channel.
+    function m3uReader(text) {
         var lines = text.split(/\r?\n/);
+        var pos = 0;
+        var attrRegex = /([a-zA-Z0-9-]+)="([^"]*)"/g;
+        return {
+            done: function () { return pos >= lines.length; },
+            next: function (max) { var out = readM3UPart(lines, pos, max, attrRegex); pos = out.pos; return out.channels; }
+        };
+    }
+
+    function readM3UPart(lines, from0, max, attrRegex) {
         var channels = [];
         var pending = null;
-        var attrRegex = /([a-zA-Z0-9-]+)="([^"]*)"/g;
 
-        for (var i = 0; i < lines.length; i++) {
+        for (var i = from0; i < lines.length; i++) {
             var line = lines[i].trim();
             if (!line) continue;
 
@@ -1468,11 +1520,19 @@
             } else if (line.indexOf('#') !== 0) {
                 // Playlists come from anywhere: only real stream addresses are
                 // accepted, never file:, javascript:, data: or relative paths.
-                if (pending && isStreamUrl(line)) { pending.url = line; channels.push(pending); }
+                if (pending && isStreamUrl(line)) {
+                    pending.url = line;
+                    channels.push(pending);
+                    if (max && channels.length >= max) return { channels: channels, pos: i + 1 };
+                }
                 pending = null;
             }
         }
-        return channels;
+        return { channels: channels, pos: lines.length };
+    }
+
+    function parseM3U(text) {
+        return m3uReader(text).next(0);
     }
 
     // Categories are grouped per source playlist (not merged across
@@ -1735,34 +1795,75 @@
         });
     }
 
-    function channelsFromText(pl, text) {
-        var parsed = parseM3U(text);
-        if (!parsed.length && pl.type === 'xtream') throw new Error('No live channels found');
-        if (!parsed.length) throw new Error('No channels found');
-        // Channel number: the playlist's tvg-chno when present, else list position.
-        parsed.forEach(function (ch, i) {
+    // Channel number: the playlist's tvg-chno when present, else list position.
+    // `offset` is how many channels of this playlist came before `list`.
+    function numberChannels(pl, list, offset) {
+        list.forEach(function (ch, i) {
             ch.playlistId = pl.id;
             ch.playlistName = pl.name;
-            ch.number = parseInt(ch.chno, 10) || (i + 1);
+            ch.number = parseInt(ch.chno, 10) || (offset + i + 1);
         });
+    }
+
+    function noChannelsError(pl) {
+        return new Error(pl.type === 'xtream' ? 'No live channels found' : 'No channels found');
+    }
+
+    function channelsFromText(pl, text) {
+        var parsed = parseM3U(text);
+        if (!parsed.length) throw noChannelsError(pl);
+        numberChannels(pl, parsed, 0);
         return parsed;
+    }
+
+    // Downloads a playlist's text. A playlist far beyond any real one would
+    // only exhaust the TV's memory and storage.
+    function downloadText(pl) {
+        return (pl.type === 'xtream' ? fetchXtreamText(pl) : fetchText(pl.url))
+            .then(function (text) {
+                if (text.length > PLAYLIST_MAX_CHARS) throw new Error('Playlist is too large');
+                return text;
+            });
     }
 
     // Downloads a playlist, stores its text and resolves to { channels, text }.
     function downloadPlaylist(pl) {
-        return (pl.type === 'xtream' ? fetchXtreamText(pl) : fetchText(pl.url))
+        return downloadText(pl)
             .then(function (text) {
-                // A playlist far beyond any real one would only exhaust the TV's memory and storage.
-                if (text.length > PLAYLIST_MAX_CHARS) throw new Error('Playlist is too large');
                 var channels = channelsFromText(pl, text);
                 cachePut(pl, text);
                 return { channels: channels, text: text };
             });
     }
 
+    // Start-up reads a playlist in steps (see refreshActiveChannels). This
+    // reads the first channels only and resolves to { pl, reader, channels,
+    // cached }: the rest is read later from `reader`. Failing like
+    // channelsFromText does when there is no channel at all.
+    function openPlaylist(pl) {
+        function open(text, cached) {
+            var reader = m3uReader(text);
+            var first = reader.next(FIRST_CHANNELS);
+            if (!first.length) throw noChannelsError(pl);
+            numberChannels(pl, first, 0);
+            return { pl: pl, reader: reader, channels: first, cached: cached };
+        }
+        return cacheGet(pl).then(function (hit) {
+            if (hit) {
+                try { return open(hit.text, hit); } catch (e) { /* unusable copy: download */ }
+            }
+            return downloadText(pl).then(function (text) {
+                var opened = open(text, null);
+                cachePut(pl, text);
+                return opened;
+            });
+        });
+    }
+
     // state.channels is always the active playlists' channels, in the order
     // the playlists are listed in Settings.
     function rebuildChannels() {
+        if (state.partial) { drawFirstChannels(); return; }
         var all = [];
         state.playlists.forEach(function (pl) {
             var list = state.channelsByPlaylist[pl.id];
@@ -1795,18 +1896,59 @@
         refreshLiveList(false);
     }
 
+    // While the start-up still reads (state.partial): the channels read so far
+    // of the active playlists, without categories, copy groups or a count.
+    // A setting changed in that time (a playlist switch, hiding tagged
+    // channels) is drawn from here, and the full rebuild follows when the
+    // reading ends.
+    function drawFirstChannels() {
+        var all = [];
+        state.playlists.forEach(function (pl) {
+            var list = state.channelsByPlaylist[pl.id];
+            if (list && state.activePlaylistIds.indexOf(pl.id) !== -1) all = all.concat(list);
+        });
+        if (taggedMode === 'hide') all = all.filter(function (ch) { return !isTagged(ch); });
+        labelClashes(all);
+        state.channels = all;
+        state.categories = [];
+        state.copyGroups = Object.create(null);
+        if (state.section.type !== 'favorites') state.section = { type: 'all' };
+        refreshLiveList(false);
+    }
+
     // Start of the app: every active playlist comes from its stored copy when
     // there is one, otherwise from the network. One bad playlist shows an
     // error for itself without blanking out the others.
+    //
+    // First screen first: a big playlist takes long to read and sort, so the
+    // first channels of each playlist are drawn as soon as they are read
+    // (state.partial is true), and the rest is read in small steps, so a key
+    // press never waits long. When all is read, the full path runs as before.
+    // What waits for the whole list: the channel count, the categories and the
+    // side menu's category list, copy groups (copy switching), the saved last
+    // channel and section, number-key jumps and the TV Guide's channel list.
+    // On the full list the highlighted channel is kept by its address, and a
+    // preview that is playing is not restarted. Labels from labelClashes() on
+    // the first channels alone can gain a quality on the full list
+    // ("BBC One" becomes "BBC One (FHD)"): accepted.
     function refreshActiveChannels(options) {
         options = options || {};
         var activePlaylists = state.playlists.filter(function (p) { return state.activePlaylistIds.indexOf(p.id) !== -1; });
         state.channelsByPlaylist = {};
+        var screenShown = false;
+
+        function showScreen0() {
+            if (options.screen && !screenShown) switchToScreen(options.screen);
+            screenShown = true;
+        }
 
         function show() {
+            var wasPartial = state.partial;
+            state.partial = false;
             rebuildChannels();
             showLoading(false);
-            if (options.screen) switchToScreen(options.screen);
+            showScreen0();
+            if (wasPartial) refreshSettings();   // the playlist counts were held back
             if (options.after) options.after();
         }
 
@@ -1814,34 +1956,67 @@
 
         showLoading(true);
         Promise.all(activePlaylists.map(function (pl) {
-            return cacheGet(pl).then(function (hit) {
-                if (hit) {
-                    try { return { pl: pl, channels: channelsFromText(pl, hit.text), cached: hit }; } catch (e) { /* unusable copy: download */ }
-                }
-                return downloadPlaylist(pl).then(function (r) { return { pl: pl, channels: r.channels }; });
-            }).catch(function (err) { return { pl: pl, channels: [], error: err }; });
+            return openPlaylist(pl).catch(function (err) { return { pl: pl, channels: [], error: err }; });
         })).then(function (results) {
             var failures = [];
-            var total = 0;
-            var stored = 0;
+            var good = [];
             results.forEach(function (r) {
-                if (r.error) { failures.push(r.pl.name + ': ' + r.error.message); return; }
-                state.channelsByPlaylist[r.pl.id] = r.channels;
-                total += r.channels.length;
-                if (r.cached) stored++;
+                if (r.error) failures.push(r.pl.name + ': ' + r.error.message); else good.push(r);
             });
-            logEvent('playlists: ' + total + ' channels' + (stored ? ' (' + stored + ' from memory)' : '') +
-                (failures.length ? ', failed: ' + failures.join('; ') : ''));
-            show();
-            if (failures.length) showToast('Could not load ' + failures.join('; '));
 
-            // Stored copies that are getting old: fetch a fresh one, a little
-            // after the start so it does not compete with the first screen.
-            results.forEach(function (r) {
-                if (r.cached && Date.now() - r.cached.time > PLAYLIST_MAX_AGE_MS) {
-                    setTimeout(function () { refreshInBackground(r.pl, r.cached.text); }, PLAYLIST_REFRESH_DELAY_MS);
-                }
-            });
+            // A playlist switched off, reloaded or deleted while reading no
+            // longer has these channels: its reading stops.
+            function current(r) { return state.channelsByPlaylist[r.pl.id] === r.channels; }
+
+            function finish() {
+                var total = 0;
+                var stored = 0;
+                good.forEach(function (r) {
+                    if (!current(r)) return;
+                    total += r.channels.length;
+                    if (r.cached) stored++;
+                });
+                logEvent('playlists: ' + total + ' channels' + (stored ? ' (' + stored + ' from memory)' : '') +
+                    (failures.length ? ', failed: ' + failures.join('; ') : ''));
+                show();
+                // The TV Guide may have been opened on the first channels.
+                if (activeScreenId() === 'screen-guide') openGuide();
+                if (failures.length) showToast('Could not load ' + failures.join('; '));
+
+                // Stored copies that are getting old: fetch a fresh one, a little
+                // after the start so it does not compete with the first screen.
+                good.forEach(function (r) {
+                    if (current(r) && r.cached && Date.now() - r.cached.time > PLAYLIST_MAX_AGE_MS) {
+                        setTimeout(function () { refreshInBackground(r.pl, r.cached.text); }, PLAYLIST_REFRESH_DELAY_MS);
+                    }
+                });
+            }
+
+            // Reads the next piece of the next playlist that has more, then
+            // lets the remote and the screen have a turn.
+            var at = 0;
+            function readMore() {
+                while (at < good.length && (!current(good[at]) || good[at].reader.done())) { good[at].reader = null; at++; }
+                if (at >= good.length) { finish(); return; }
+                var r = good[at];
+                var more = r.reader.next(CHUNK_CHANNELS);
+                numberChannels(r.pl, more, r.channels.length);
+                for (var i = 0; i < more.length; i++) r.channels.push(more[i]);
+                setTimeout(readMore, 0);
+            }
+
+            // Each playlist's list is stored now and grows in place as it is read.
+            good.forEach(function (r) { state.channelsByPlaylist[r.pl.id] = r.channels; });
+            var pending = good.some(function (r) { return !r.reader.done(); });
+            if (!pending) { finish(); return; }
+
+            // First draw: the first channels of each playlist.
+            state.partial = true;
+            state.section = { type: 'all' };
+            drawFirstChannels();
+            showLoading(false);
+            showScreen0();
+            setTimeout(readMore, 0);
         });
     }
 
@@ -2260,7 +2435,7 @@
             ['TV software', tvSoftware()],
             ['Samsung player', hasAvplay ? 'available' : 'not available'],
             ['Playlists on', String(activePlaylists().length)],
-            ['Channels', String(state.channels.length)],
+            ['Channels', state.partial ? 'still reading' : String(state.channels.length)],
             ['Last app error', lastError || 'none']
         ];
         return reportLink(REPORT_ISSUE_URL, 'MyTvApp ' + APP_VERSION + ': ', facts, readLog(), REPORT_MAX);
@@ -2353,7 +2528,7 @@
                     showToast('Forgotten');
                 }
             });
-            rows.push({ kind: 'info', label: 'Channels', value: String(state.channels.length) });
+            rows.push({ kind: 'info', label: 'Channels', value: state.partial ? 'still reading' : String(state.channels.length) });
             rows.push({ kind: 'info', label: 'Favorites', value: String(state.favorites.length) });
             rows.push({ kind: 'info', label: 'Channels with a programme guide', value: state.guide ? String(state.channels.filter(function (ch) { return guideProgrammes(ch).length > 0; }).length) : 'guide not loaded' });
         } else if (index === 3) {
@@ -2552,7 +2727,7 @@
         text.appendChild(url);
         main.appendChild(text);
         var count = state.channelsByPlaylist[pl.id];
-        if (isActive && count) {
+        if (isActive && count && !state.partial) {
             var n = document.createElement('span');
             n.className = 'setting-value';
             n.textContent = count.length + ' channels';
@@ -2687,6 +2862,13 @@
         return !!window.MYTVAPP_BUNDLED && (location.protocol.indexOf('http') !== 0 || location.hostname === 'localhost');
     }
 
+    // Coming back to the front checks for an update again, at most once a minute,
+    // so quick switches between apps do not start a check each time.
+    var lastReturnCheck = 0;
+    function returnCheckDue(last, now) {
+        return now - last >= 60 * 1000;
+    }
+
     // manual: started from Settings, so it reports back and may restart at once.
     // periodic: the repeat check while the app runs. It stays quiet when there
     // is nothing new, and does nothing while a downloaded update is waiting.
@@ -2813,13 +2995,63 @@
         return true;
     }
 
-    function closeUpdateNotice() {
-        document.getElementById('updateNotice').hidden = true;
+    function closeNotice(id) {
+        document.getElementById(id).hidden = true;
         if (noticeReturnZone) Focus.setZone(noticeReturnZone.name, noticeReturnZone.row, noticeReturnZone.col);
         noticeReturnZone = null;
         if (Focus.currentZone === 'liveList') renderLiveList();
         if (Focus.currentZone === 'guideGrid') renderGuide();
     }
+
+    function closeUpdateNotice() {
+        closeNotice('updateNotice');
+        setTimeout(askAboutReport, 600);   // an error that waited behind the update notice
+    }
+
+    // An app error (an "ERROR" line in the diagnostics) offers, in the same
+    // corner, to report it from the phone. Once per start; it waits like the
+    // update notice and never covers it. A channel that does not play is not
+    // an app error and does not ask.
+    var reportPending = false;
+    var reportAsked = false;
+    var REPORT_SECTION = SETTINGS_SECTIONS.indexOf('Report a problem');
+
+    Focus.zones.reportNotice = {
+        getMatrix: function () {
+            return [[document.getElementById('reportLaterBtn'), document.getElementById('reportNowBtn')]];
+        }
+    };
+
+    function offerReport() {
+        if (reportAsked) return;
+        reportPending = true;
+        askAboutReport();
+    }
+
+    // Returns true when the notice was put on screen.
+    function askAboutReport() {
+        if (!reportPending || reportAsked) return false;
+        if (state.fullscreen || activeScreenId() === 'screen-add' || !document.getElementById('confirmModal').hidden) return false;
+        if (!document.getElementById('updateNotice').hidden) return false;
+        reportPending = false;
+        reportAsked = true;
+        // Already on Report a problem: nothing to ask.
+        if (activeScreenId() === 'screen-settings' && state.settingsSection === REPORT_SECTION) return false;
+        noticeReturnZone = { name: Focus.currentZone, row: Focus.row, col: Focus.col };
+        document.getElementById('reportNotice').hidden = false;
+        Focus.setZone('reportNotice', 0, 1);   // on "Report"
+        return true;
+    }
+
+    document.getElementById('reportLaterBtn').addEventListener('click', function () { closeNotice('reportNotice'); });
+    document.getElementById('reportNowBtn').addEventListener('click', function () {
+        document.getElementById('reportNotice').hidden = true;
+        noticeReturnZone = null;
+        switchToScreen('screen-settings');
+        state.settingsSection = REPORT_SECTION;
+        renderSettings();
+        Focus.setZone('settingsCats', REPORT_SECTION, 0);
+    });
 
     document.getElementById('updateNowBtn').addEventListener('click', function () { location.reload(); });
     document.getElementById('updateLaterBtn').addEventListener('click', function () {
@@ -3076,6 +3308,7 @@
         // Opened from the TV Guide: back to it, on the channel that is playing.
         if (state.fullFrom === 'screen-guide' && state.guideList.length) {
             setTimeout(askAboutUpdate, 600);
+            setTimeout(askAboutReport, 700);
             showScreen('screen-guide');
             var row = state.nowPlaying ? indexByUrl(state.guideList, state.nowPlaying.url) : -1;
             if (row !== -1) state.guideRow = row;
@@ -3087,6 +3320,7 @@
         }
 
         setTimeout(askAboutUpdate, 600);   // an update that arrived while watching
+        setTimeout(askAboutReport, 700);   // an error that happened while watching
 
         showScreen('screen-live');
         // Zapped to a channel outside the section that was showing: show them all.
@@ -3133,7 +3367,9 @@
     // goes straight to full screen.
     function restoreLastChannel() {
         var saved = readStoredJson(LAST_CHANNEL_KEY, null);
-        if (!saved || !saved.url || activeScreenId() !== 'screen-live') return;
+        if (!saved || !saved.url || activeScreenId() !== 'screen-live' || state.fullscreen) return;
+        // Someone already used the remote on the first channels: keep what they chose.
+        if (keyWhileReading) { logEvent('last channel not restored: a key was pressed while the channels were read'); return; }
 
         var section = null;
         if (saved.context === 'favorites' && indexByUrl(visibleFavorites(), saved.url) !== -1) {
@@ -3174,6 +3410,8 @@
     // Set while the channel chosen at the start has not proved itself (a
     // picture for 5 s, or any key press).
     var reopenPending = false;
+    // Set by a key press while the start-up still reads the channels.
+    var keyWhileReading = false;
     function clearReopenPending() {
         if (!reopenPending) return;
         reopenPending = false;
@@ -3260,7 +3498,8 @@
         logoEl.style.backgroundImage = ch.logo ? ('url(' + JSON.stringify(ch.logo) + ')') : '';
         updateFavoriteButton();
 
-        var hlsOk = !!(window.Hls && Hls.isSupported());
+        // Not loaded yet: the library is loaded when this engine is started.
+        var hlsOk = window.Hls ? Hls.isSupported() : true;
         var engines = hasAvplay ? ['avplay', 'native', 'hls'] : (isTizen ? ['native', 'hls'] : ['hls', 'native']);
         state.enginesLeft = engines.filter(function (e) { return e !== 'hls' || hlsOk; });
         state.playErrors = [];
@@ -3308,7 +3547,7 @@
         var patience = state.playErrors.length ? FALLBACK_WATCHDOG_MS : PLAY_WATCHDOG_MS;
         state.watchdogId = setTimeout(function () {
             if (token !== state.playToken || state.isPlaying) return;
-            engineFailed(token, engineLabel(engine) + ': no video after ' + (patience / 1000) + ' s');
+            engineFailed(token, engineLabel(engine) + ': no video after ' + (patience / 1000) + ' s', engine);
         }, patience);
 
         if (engine === 'avplay') startAvplay(ch, token);
@@ -3462,7 +3701,7 @@
                 onerror: function (err) {
                     if (token !== state.playToken) return;
                     var reason = label + (err && err.name ? err.name : String(err));
-                    if (state.isPlaying) streamStopped(reason); else engineFailed(token, reason);
+                    if (state.isPlaying) streamStopped(reason); else engineFailed(token, reason, 'avplay');
                 },
                 onevent: function () { /* not used */ }
             });
@@ -3474,17 +3713,22 @@
                 if (pictureTuning) {
                     try { av.setDisplayMethod('PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO'); } catch (e) { /* older firmware */ }
                 }
-                try { av.play(); } catch (e) { engineFailed(token, label + (e.name || e)); }
+                try { av.play(); } catch (e) { engineFailed(token, label + (e.name || e), 'avplay'); }
             }, function (e) {
-                if (token === state.playToken) engineFailed(token, label + (e && e.name ? e.name : String(e)));
+                if (token === state.playToken) engineFailed(token, label + (e && e.name ? e.name : String(e)), 'avplay');
             });
         } catch (e) {
-            engineFailed(token, label + (e && e.name ? e.name : String(e)));
+            engineFailed(token, label + (e && e.name ? e.name : String(e)), 'avplay');
         }
     }
 
-    function engineFailed(token, reason) {
-        if (token !== state.playToken || state.isPlaying) return;
+    // engine: the player the failure came from. A report from a player that is
+    // no longer the current one is ignored: the Samsung player can report a
+    // second error when it is closed, and that must not cost the next player
+    // its turn.
+    function engineFailed(token, reason, engine) {
+        if (token !== state.playToken || state.isPlaying || state.playFailed) return;
+        if (engine !== state.engine) return;
         console.error('Playback engine failed:', reason);
         // A channel the list only passes over gets one line at the end, not one per player.
         if (state.fullscreen) logEvent('failed: ' + reason);
@@ -3506,7 +3750,34 @@
         safePlay(token);
     }
 
+    // hls.js is large, so it is loaded the first time a channel needs it rather
+    // than at start-up. Calls made while it loads wait for the one load.
+    var hlsWaiting = null;
+    function loadHls(done) {
+        if (window.Hls) { done(true); return; }
+        if (hlsWaiting) { hlsWaiting.push(done); return; }
+        hlsWaiting = [done];
+        function finish(ok) {
+            var list = hlsWaiting || [];
+            hlsWaiting = null;
+            list.forEach(function (f) { f(ok && !!window.Hls); });
+        }
+        var script = document.createElement('script');
+        script.src = 'lib/hls.min.js';
+        script.onload = function () { finish(true); };
+        script.onerror = function () { finish(false); };
+        document.head.appendChild(script);
+    }
+
     function startHls(ch, token) {
+        if (!window.Hls) {
+            loadHls(function (ok) {
+                if (token !== state.playToken) return;
+                if (!ok) { engineFailed(token, 'hls: the player library did not load', 'hls'); return; }
+                startHls(ch, token);
+            });
+            return;
+        }
         // Local reference: callbacks from an earlier attempt must not act on a newer one.
         var hls = new Hls({ backBufferLength: 30 });
         var networkRetries = 0;
@@ -3548,7 +3819,7 @@
                 showOverlay();
                 unavailableToast();
             } else {
-                engineFailed(token, 'hls.js: ' + data.details);
+                engineFailed(token, 'hls.js: ' + data.details, 'hls');
             }
         });
     }
@@ -3573,7 +3844,7 @@
             showOverlay();
             unavailableToast();
         } else {
-            engineFailed(state.playToken, reason);
+            engineFailed(state.playToken, reason, 'native');
         }
     });
     videoPlayer.addEventListener('waiting', function () {
@@ -3705,6 +3976,8 @@
         state.digitBuffer = '';
         document.getElementById('numberEntry').hidden = true;
         if (!n) return;
+        // Channels are still being read: a number may be further down the list.
+        if (state.partial) { showToast('Still reading the channels'); return; }
         var list = state.zapList || [];
         var ch = list.find(function (c) { return c.number === n; });
         if (ch) { playChannel(ch, state.zapContext, list, state.zapTitle); return; }
@@ -3759,6 +4032,13 @@
     // The TV takes the video hardware away when the app goes to the background
     // (Home key, another app). Without this the picture stays black on return.
     document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) {
+            var now = Date.now();
+            if (returnCheckDue(lastReturnCheck, now)) {
+                lastReturnCheck = now;
+                checkForUpdate(false, true);
+            }
+        }
         if (!state.nowPlaying) return;
         logEvent(document.hidden ? 'app hidden' : 'app visible again');
         if (document.hidden) {
@@ -3776,6 +4056,7 @@
     function handleBack() {
         if (!document.getElementById('confirmModal').hidden) { hideConfirm(); return; }
         if (!document.getElementById('updateNotice').hidden) { document.getElementById('updateLaterBtn').click(); return; }
+        if (!document.getElementById('reportNotice').hidden) { document.getElementById('reportLaterBtn').click(); return; }
         if (activeScreenId() === 'screen-add') { switchToScreen('screen-settings'); return; }
         if (activeScreenId() === 'screen-settings') { switchToScreen('screen-live'); return; }
         // TV Guide with the remote in the menu: back to Live TV.
@@ -3824,6 +4105,7 @@
         var kc = event.keyCode;
         if ((kc >= 37 && kc <= 40) || kc === KEYCODE.ENTER || kc === KEYCODE.BACK) event.preventDefault();
         clearReopenPending();   // a key press: the app is alive and someone is using it
+        if (state.partial) keyWhileReading = true;
 
         var onPlayer = document.getElementById('screen-player').classList.contains('active');
 

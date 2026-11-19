@@ -107,6 +107,27 @@ test('quality tags, a country prefix and emoji are left out of the shown name', 
     assert.strictEqual(app.cleanName('Canal 5 [504p]'), 'Canal 5');
 });
 
+test('a country name is left out of the shown name and kept as a tag', function () {
+    assert.strictEqual(app.cleanName('Portugal | RTP1'), 'RTP1');
+    assert.strictEqual(app.cleanName('Portugal: RTP1 HD'), 'RTP1');
+    assert.strictEqual(app.cleanName('BBC One (United Kingdom)'), 'BBC One');
+    assert.strictEqual(app.cleanName('BBC One (United Kingdom) FHD'), 'BBC One');
+    assert.strictEqual(app.cleanName('Sky News [Italy]'), 'Sky News');
+    assert.strictEqual(app.cleanName('Scotland: BBC Alba HD'), 'BBC Alba');
+    assert.strictEqual(app.countryIn('Portugal | RTP1'), 'Portugal');
+    assert.strictEqual(app.countryIn('BBC One (United Kingdom)'), 'United Kingdom');
+    assert.strictEqual(app.countryIn('Nigeria | Channel'), 'Nigeria');
+    assert.deepStrictEqual(app.channelTags({ rawName: 'Portugal | RTP1 [Geo-blocked]' }), ['Geo-blocked', 'Portugal']);
+});
+
+test('a country name that is part of the channel name is kept', function () {
+    assert.strictEqual(app.cleanName('Portugal Sport 1'), 'Portugal Sport 1');
+    assert.strictEqual(app.cleanName('Georgia'), 'Georgia');
+    assert.strictEqual(app.cleanName('Sky News Germany'), 'Sky News Germany');
+    assert.strictEqual(app.countryIn('Sky News Germany'), '');
+    assert.strictEqual(app.countryIn('Portugal Sport 1'), '');
+});
+
 test('words that only look like tags are kept, and a three-letter prefix stays', function () {
     assert.strictEqual(app.cleanName('HDTV Guide'), 'HDTV Guide');
     assert.strictEqual(app.cleanName('SDK Channel'), 'SDK Channel');
@@ -332,4 +353,55 @@ test('a clash with no quality to add, and a name that is not a clash, stay as th
 test('the quality is kept in the case a playlist gives it, resolutions in lower case', function () {
     assert.strictEqual(app.qualityLabel({ rawName: 'Sky Sport hd' }), 'HD');
     assert.strictEqual(app.qualityLabel({ rawName: 'Rai 1 576P' }), '576p');
+});
+
+test('coming back to the front checks for an update at most once a minute', function () {
+    assert.strictEqual(app.returnCheckDue(0, 60 * 1000), true);
+    assert.strictEqual(app.returnCheckDue(0, 59 * 1000), false);
+    assert.strictEqual(app.returnCheckDue(100000, 100000 + 30000), false);
+    assert.strictEqual(app.returnCheckDue(100000, 100000 + 60000), true);
+});
+
+test('reading a playlist in steps gives exactly the channels parseM3U gives', function () {
+    var lines = ['#EXTM3U'];
+    for (var i = 0; i < 23; i++) {
+        lines.push('#EXTINF:-1 tvg-id="c' + i + '" group-title="G' + (i % 3) + '",Channel ' + i + ' FHD');
+        if (i % 4 === 0) lines.push('#EXTGRP:Own group ' + i);
+        if (i % 5 === 0) lines.push('#EXTVLCOPT:http-user-agent=Agent' + i);
+        if (i % 6 === 0) lines.push('');
+        lines.push('http://example.com/' + i + '.m3u8');
+    }
+    // A broken entry, then a channel whose address is the very last line, with no newline after it.
+    lines.push('#EXTINF:-1,No address');
+    lines.push('#EXTINF:-1,Last one');
+    lines.push('http://example.com/last.m3u8');
+    var text = lines.join('\n');
+    var expected = app.parseM3U(text);
+    assert.strictEqual(expected.length, 24);
+    [1, 2, 7, 23, 24, 25, 100].forEach(function (size) {
+        var reader = app.m3uReader(text);
+        var got = [];
+        var steps = 0;
+        while (!reader.done()) {
+            var part = reader.next(size);
+            assert.ok(part.length <= size, 'a step is never longer than ' + size);
+            got = got.concat(part);
+            if (++steps > 100) assert.fail('the reader does not finish');
+        }
+        assert.deepStrictEqual(got, expected, 'chunk size ' + size);
+        assert.deepStrictEqual(reader.next(size), [], 'nothing is left after the end');
+    });
+});
+
+test('a step ends right after a channel, so #EXTGRP and #EXTVLCOPT stay with their channel', function () {
+    var text = [
+        '#EXTM3U',
+        '#EXTINF:-1,One', 'http://e/1',
+        '#EXTINF:-1,Two', '#EXTGRP:Sport', '#EXTVLCOPT:http-user-agent=Agent', 'http://e/2'
+    ].join('\n');
+    var reader = app.m3uReader(text);
+    assert.strictEqual(reader.next(1)[0].group, 'Other');
+    var two = reader.next(1)[0];
+    assert.strictEqual(two.group, 'Sport');
+    assert.strictEqual(two.userAgent, 'Agent');
 });
