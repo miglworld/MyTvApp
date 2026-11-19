@@ -1,6 +1,6 @@
 # MyTvApp
 
-[![Latest release](https://img.shields.io/github/v/release/miglworld/MyTvApp?label=release)](https://github.com/miglworld/MyTvApp/releases/latest) ![Platform: Samsung Tizen](https://img.shields.io/badge/platform-Samsung%20Tizen-1428A0)
+[![Latest release](https://img.shields.io/github/v/release/miglworld/MyTvApp?label=release)](https://github.com/miglworld/MyTvApp/releases/latest) ![Platform: Samsung Tizen](https://img.shields.io/badge/platform-Samsung%20Tizen-1428A0) [![Check](https://github.com/miglworld/MyTvApp/actions/workflows/check.yml/badge.svg?branch=main)](https://github.com/miglworld/MyTvApp/actions/workflows/check.yml) [![CodeQL](https://github.com/miglworld/MyTvApp/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/miglworld/MyTvApp/actions/workflows/codeql.yml) ![Licence: all rights reserved](https://img.shields.io/badge/licence-all%20rights%20reserved-lightgrey)
 
 A live TV player for Samsung Smart TVs. It plays the channels of your M3U playlists, shows what is on now and next, and is driven entirely with the TV remote.
 
