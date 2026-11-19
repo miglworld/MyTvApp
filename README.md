@@ -35,7 +35,7 @@ Licence: all rights reserved. See [LICENSE](LICENSE).
 
 No accounts, no sign-up, no analytics. The app contacts only your playlist servers, GitHub (for updates and the programme guide) and iptv-org (for the two preset playlists).
 
-Checked by the project's own tools: 110 automated tests (unit, integration and browser), and a benchmark that parses a 13,000-channel playlist ([perf/bench.js](perf/bench.js)). Run them with `npm test` and `npx playwright test`.
+Checked by the project's own tools: 121 automated tests (unit, integration and browser), and a benchmark that parses a 13,000-channel playlist ([perf/bench.js](perf/bench.js)). Run them with `npm test` and `npx playwright test`.
 
 | | |
 |---|---|
@@ -218,7 +218,7 @@ The TV does not read a full programme guide itself: one country's guide is tens 
 - **A channel does not play.** Channels that failed last time are shown darker. If the channel has another copy in the same playlist, the app tries it automatically. The stream itself may be offline or blocked in your country, which is common with free playlists.
 - **A new version does not appear.** Open Settings, Updates and choose "Check for updates now". A version that does not start is discarded, and the installed version keeps running.
 - **Installing fails with "Author certificate not match".** The TV already has a copy signed with another certificate. Uninstall it first, then install again.
-- **Something went wrong on the screen.** The error is shown in a red box at the bottom and kept under Settings, About.
+- **Something went wrong on the screen.** The error is shown in a red box at the bottom and kept under Settings, About. A "Something went wrong" notice in the corner also offers **Report**, which opens Report a problem with its QR code.
 
 ## Development
 
