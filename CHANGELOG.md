@@ -2,6 +2,9 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.12.16 (dev branch, not released yet)
+- Fixed: with a channel playing behind Settings, "Add a playlist" and "Add an Xtream Codes account" seemed to do nothing. Their screen opened under the picture. It now shows above it, on a floating panel like Settings, with lighter hint text so it reads over the picture.
+
 ## v0.12.15 (dev branch, not released yet)
 - Fixed: a channel the Samsung player could not open, and the TV player or hls.js played instead, could play sound with no picture, because the Samsung player's surface stayed over the picture. It is now hidden whenever another player plays.
 

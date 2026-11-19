@@ -241,6 +241,7 @@ button {
 .notice,
 .settings-cats,
 .settings-main,
+.add-playlist-panel,
 .channel-panel,
 .modal-box,
 .toast,
@@ -256,6 +257,7 @@ html:not(.avplay-active) .sidebar,
 html:not(.avplay-active) .live-channels,
 html:not(.avplay-active) .guide-panel,
 html:not(.avplay-active) .notice,
+html:not(.avplay-active) .add-playlist-panel,
 html:not(.avplay-active) .channel-panel,
 html:not(.avplay-active) .modal-box,
 html:not(.avplay-active) .toast,
@@ -269,6 +271,7 @@ html.avplay-active .sidebar,
 html.avplay-active .live-channels,
 html.avplay-active .guide-panel,
 html.avplay-active .notice,
+html.avplay-active .add-playlist-panel,
 html.avplay-active .channel-panel,
 html.avplay-active .modal-box,
 html.avplay-active .toast,
@@ -1270,7 +1273,10 @@ html.menu-dim .video-dim {
 /* ==========================================================================
    Screen: Add / Edit Playlist
    ========================================================================== */
+/* Above the picture that keeps playing behind it (z-index 0), like the
+   other screens; without this the picture covered the whole screen. */
 #screen-add {
+	z-index: 2;
 	padding: 72px 72px;
 	display: none;
 }
@@ -1284,6 +1290,10 @@ html.menu-dim .video-dim {
 .add-playlist-panel {
 	width: 1300px;
 	max-width: 100%;
+	box-sizing: border-box;
+	/* The fields' radius (20px) plus this padding, so the corners match. */
+	padding: 36px;
+	border-radius: 56px;
 }
 
 .add-playlist-panel h2 {
@@ -1294,7 +1304,7 @@ html.menu-dim .video-dim {
 
 .add-playlist-panel .hint {
 	font-size: 22px;
-	color: #8e8e93;
+	color: #aeaeb2;
 	margin-bottom: 28px;
 }
 
@@ -1333,7 +1343,7 @@ html.menu-dim .video-dim {
 
 .input-tip {
 	font-size: 20px;
-	color: #636366;
+	color: #aeaeb2;
 	margin-bottom: 32px;
 }
 
