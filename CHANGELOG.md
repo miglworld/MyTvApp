@@ -2,6 +2,10 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.12.8 (dev branch, not released yet)
+- Remote: Up and Down return to the same button after passing a shorter row. Before, the focus jumped to the first button.
+- The picture behind the side menu, Settings and Add Playlist is dimmed, so the text reads clearly. The channel list keeps the picture bright.
+
 ## v0.12.7 (dev branch, not released yet)
 - Settings: the channel keeps playing while Settings is open, as it does behind the TV Guide, instead of stopping.
 
