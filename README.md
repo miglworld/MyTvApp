@@ -224,25 +224,53 @@ The TV does not read a full programme guide itself: one country's guide is tens 
 
 ### Project structure
 
+The app (these paths stay fixed: installed TVs download updates by them):
+
 ```
 config.xml              Tizen widget manifest (app id, privileges, start page)
 index.html              The app and the package's start page: all screens
+icon.png                App icon referenced by config.xml
 css/style.css           All styling
 js/boot.js              Starts js/main.js, or a newer downloaded copy of the app
 js/main.js              App logic: menu, lists, guide, playback, settings, updates
 lib/hls.min.js          hls.js 1.6.19, bundled (license: lib/hls.LICENSE)
-icon.png                App icon referenced by config.xml
-package.json            Version and TizenBrew module info
-guide/config.json       Which playlists and guide feeds the programme guide is built from
+package.json            Version and TizenBrew module info (package-lock.json pins the tools)
+```
+
+Building, checking and testing:
+
+```
 scripts/build-wgt.sh    Builds the unsigned MyTvApp.wgt
-scripts/build-guide.js  Builds the small programme guide (run by GitHub on a schedule)
 scripts/check.sh        Checks run before every merge (also by GitHub on each pull request)
+scripts/build-guide.js  Builds the small programme guide (run by GitHub on a schedule)
+guide/config.json       Which playlists and guide feeds the programme guide is built from
+scripts/screenshots/    Retakes the README screenshots from a demo setup
 test/                   Unit, integration and defensive tests (npm test)
 e2e/                    Browser tests and the crawler (npx playwright test)
 perf/                   Performance smoke test and its comparison with the base branch
-scripts/screenshots/    Retakes the README screenshots from a demo setup
-docs/decisions.md       Why the app is built the way it is
+.github/                GitHub workflows (checks, tests, CodeQL, the nightly run, the guide build) and Dependabot
+eslint.config.js        Lint rules, including the ES5 rule for the TV
+playwright.config.js    Browser test settings
+.lighthouserc.json      Lighthouse limits for the nightly run
+.gitleaksignore         Known findings the secret scan may skip, each one explained
 ```
+
+Documents:
+
+```
+README.md               This page
+CHANGELOG.md            What changed in each version
+SECURITY.md             Security rules and how to report a problem
+LICENSE                 All rights reserved
+AGENTS.md               Rules for every AI model and coding tool working on this repository
+CLAUDE.md               Points Claude Code to AGENTS.md
+docs/decisions.md       Why the app is built the way it is
+docs/ACCESSIBILITY_TEST_REPORT.md   WCAG 2.2 AA accessibility test
+docs/SECURITY_TEST_REPORT.md        Security and test report
+docs/images/            Screenshots used on this page
+```
+
+The `guide` branch holds the built programme guide that the app downloads; `main` is what installed TVs update from, and `dev` is where changes are tested first.
 
 There is no build step for the app itself: `index.html` runs as it is, in a desktop browser too (`python3 -m http.server`, then open `index.html`; the Samsung player is not available there).
 
