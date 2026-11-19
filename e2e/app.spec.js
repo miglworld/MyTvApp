@@ -772,3 +772,36 @@ test('settings: its panels have the same glass as the channel list and the guide
         expect(await glass('.add-playlist-panel')).toEqual(list);
     }
 });
+
+// A big playlist: the first channels are drawn at once and the rest is read in
+// steps. The count, categories and the saved last channel wait for the whole list.
+test('a big playlist: first rows first, then the full count, all categories and a last channel beyond the first step', async ({ page }) => {
+    const COUNT = 3000;
+    const lines = ['#EXTM3U'];
+    for (let i = 0; i < COUNT; i++) {
+        lines.push(`#EXTINF:-1 tvg-id="Big${i}" group-title="Group ${i % 40}",Big Channel ${i}`);
+        lines.push(`https://stream.example.invalid/big/${i}.m3u8`);
+    }
+    const last = 2500;   // far beyond the first channels read
+    await page.addInitScript((saved) => {
+        localStorage.setItem('iptv_last_channel', JSON.stringify(saved));
+        // Every text the channel count has shown, to see it is never a partial number.
+        window.__counts = [];
+        const watch = () => {
+            const el = document.getElementById('liveCount');
+            if (!el) return setTimeout(watch, 0);
+            new MutationObserver(() => window.__counts.push(el.textContent)).observe(el, { childList: true, characterData: true, subtree: true });
+        };
+        watch();
+    }, { url: `https://stream.example.invalid/big/${last}.m3u8`, name: `Big Channel ${last}`, group: `Group ${last % 40}`, playlistId: 'pl_e2e', context: 'category' });
+    const { errors } = await open(page, { routes: { 'https://example.com/playlists/demo.m3u': { status: 200, type: 'audio/x-mpegurl', body: lines.join('\n') } } });
+    // The channel count in the menu appears only with the whole list.
+    await expect(page.locator('#navAllCount')).toHaveText(String(COUNT), { timeout: 15000 });
+    expect(await page.locator('#menuCategories .menu-item').count()).toBe(40);
+    // The saved channel is found in its category and the list stands on it.
+    await expect(page.locator('.live-row.selected')).toContainText(`Big Channel ${last}`, { timeout: 15000 });
+    await expect(page.locator('#liveTitle')).toHaveText(`Group ${last % 40}`);
+    const counts = await page.evaluate(() => window.__counts);
+    for (const c of counts) expect([''].concat([`${COUNT / 40} channels`]), 'channel count shown at start').toContain(c);
+    expect(errors, 'page errors').toEqual([]);
+});
