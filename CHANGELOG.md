@@ -2,6 +2,13 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.13.10 (dev branch, not released yet)
+- Fixed three problems in the short time at start while a big playlist is still being read:
+  - Switching a playlist on or off, or hiding tagged channels, in that time no longer empties the channel list until the reading ends. The channels read so far stay on screen, and a playlist switched off stops being read.
+  - A channel you move to in that time is kept. The saved last channel no longer replaces it when the reading ends.
+  - With tagged channels hidden and only tagged ones among the first channels, the list says "Reading the channels…" instead of "No channels yet" for a moment.
+- Settings shows a playlist's channel count only once its whole list is read.
+
 ## v0.13.9 (dev branch, not released yet)
 - Faster start with a big playlist: the first channels are drawn as soon as they are read, and the rest of the list is read in small steps afterwards, so the first screen no longer waits for all 13,000 channels to be read and sorted. The channel count, categories, copy switching, the saved last channel and number keys wait until the whole list is read. A channel name can gain its quality in brackets ("BBC One" to "BBC One (FHD)") once the whole list is read.
 

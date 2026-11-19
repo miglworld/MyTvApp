@@ -805,3 +805,98 @@ test('a big playlist: first rows first, then the full count, all categories and 
     for (const c of counts) expect([''].concat([`${COUNT / 40} channels`]), 'channel count shown at start').toContain(c);
     expect(errors, 'page errors').toEqual([]);
 });
+
+// ----- The start-up reading window -----------------------------------------------
+// The app draws the first channels, then reads the rest in steps. These tests
+// hold the reading steps (the app's readMore) until they release them, so the
+// window that lasts under a second on a real start stays open for the test.
+const holdReading = () => {
+    const realSetTimeout = window.setTimeout;
+    const held = [];
+    let holding = true;
+    window.setTimeout = function (fn) {
+        if (holding && typeof fn === 'function' && fn.name === 'readMore') { held.push(fn); return 0; }
+        return realSetTimeout.apply(window, arguments);
+    };
+    window.__heldReads = () => held.length;
+    window.__releaseReading = () => { holding = false; held.splice(0).forEach((fn) => realSetTimeout(fn, 0)); };
+};
+
+function bigPlaylist(count, prefix, tagFirst) {
+    const lines = ['#EXTM3U'];
+    for (let i = 0; i < count; i++) {
+        const tag = i < (tagFirst || 0) ? ' [Geo-blocked]' : '';
+        lines.push(`#EXTINF:-1 tvg-id="${prefix}${i}" group-title="Group ${i % 40}",${prefix} Channel ${i}${tag}`);
+        lines.push(`https://stream.example.invalid/${prefix}/${i}.m3u8`);
+    }
+    return lines.join('\n');
+}
+const m3u = (body) => ({ status: 200, type: 'audio/x-mpegurl', body });
+
+test('reading window: with tagged channels hidden and only tagged ones among the first, the list says it is reading, never "No channels yet"', async ({ page }) => {
+    await page.addInitScript(holdReading);
+    await page.addInitScript(() => localStorage.setItem('iptv_tagged_channels', 'hide'));
+    const { errors } = await open(page, { noChannels: true, routes: { 'https://example.com/playlists/demo.m3u': m3u(bigPlaylist(3000, 'Big', 400)) } });
+    await expect.poll(() => page.evaluate(() => window.__heldReads())).toBe(1);
+    await expect(page.locator('#liveList .empty-hint')).toHaveText('Reading the channels…');
+    await page.evaluate(() => window.__releaseReading());
+    await expect(page.locator('#navAllCount')).toHaveText('2600', { timeout: 15000 });
+    await expect(page.locator('.live-row').first()).toContainText('Big Channel 400');
+    expect(errors, 'page errors').toEqual([]);
+});
+
+test('reading window: hiding tagged channels or switching off a playlist keeps the channels read so far on screen', async ({ page }) => {
+    await page.addInitScript(holdReading);
+    await page.addInitScript(() => {
+        if (localStorage.getItem('e2e_seeded')) return;
+        localStorage.setItem('e2e_seeded', '1');
+        localStorage.setItem('iptv_playlists', JSON.stringify([
+            { id: 'pl_a', name: 'Big A', url: 'https://example.com/playlists/demo.m3u' },
+            { id: 'pl_b', name: 'Big B', url: 'https://example.com/playlists/two.m3u' },
+        ]));
+        localStorage.setItem('iptv_active_playlist_id', JSON.stringify(['pl_a', 'pl_b']));
+        localStorage.setItem('iptv_auto_update', '0');
+        localStorage.setItem('iptv_fast_start', '1');
+    });
+    const { errors } = await open(page, { routes: {
+        'https://example.com/playlists/demo.m3u': m3u(bigPlaylist(3000, 'Alpha', 0)),
+        'https://example.com/playlists/two.m3u': m3u(bigPlaylist(3000, 'Beta', 0)),
+    } });
+    await expect.poll(() => page.evaluate(() => window.__heldReads())).toBe(1);
+
+    // Hidden tagged channels: none is tagged, so the same channels stay.
+    await page.click('#navSettings');
+    await page.locator('.settings-cat', { hasText: 'Channels' }).click();
+    await page.locator('.setting-line', { hasText: 'Geo-blocked' }).locator('button').first().click();
+    expect(await page.evaluate(() => localStorage.getItem('iptv_tagged_channels'))).toBe('hide');
+    // Playlist B switched off while it is still being read.
+    await page.locator('.settings-cat', { hasText: 'Playlists' }).click();
+    const lineB = page.locator('.setting-playlist', { hasText: 'Big B' });
+    await expect(lineB).not.toContainText('channels');   // no count of the first channels
+    await lineB.click();
+    await expect(lineB.locator('.switch')).not.toHaveClass(/\bon\b/);
+
+    await page.click('#navLive');
+    await expect(page.locator('.live-row').first()).toContainText('Alpha Channel 0');
+    await expect(page.locator('#liveList')).not.toContainText('Beta Channel');
+
+    await page.evaluate(() => window.__releaseReading());
+    await expect(page.locator('#navAllCount')).toHaveText('3000', { timeout: 15000 });
+    await expect(page.locator('#liveList')).not.toContainText('Beta Channel');
+    expect(errors, 'page errors').toEqual([]);
+});
+
+test('reading window: a channel moved to before the reading ends is kept, not replaced by the saved last channel', async ({ page }) => {
+    await page.addInitScript(holdReading);
+    await page.addInitScript((saved) => localStorage.setItem('iptv_last_channel', JSON.stringify(saved)),
+        { url: 'https://stream.example.invalid/Big/2500.m3u8', name: 'Big Channel 2500', group: 'Group 20', playlistId: 'pl_e2e', context: 'category' });
+    const { errors } = await open(page, { routes: { 'https://example.com/playlists/demo.m3u': m3u(bigPlaylist(3000, 'Big', 0)) } });
+    await expect.poll(() => page.evaluate(() => window.__heldReads())).toBe(1);
+    await press(page, KEY.DOWN);
+    await expect(page.locator('.live-row.selected')).toContainText('Big Channel 1');
+    await page.evaluate(() => window.__releaseReading());
+    await expect(page.locator('#navAllCount')).toHaveText('3000', { timeout: 15000 });
+    await expect(page.locator('.live-row.selected')).toContainText('Big Channel 1');
+    await expect(page.locator('.live-row.selected')).not.toContainText('Big Channel 10');
+    expect(errors, 'page errors').toEqual([]);
+});
