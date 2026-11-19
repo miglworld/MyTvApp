@@ -113,6 +113,28 @@ test('settings: every section opens and shows its rows', async ({ page }) => {
     }
 });
 
+// Up and Down keep the column: a shorter row in between does not move the
+// focus to its first button. Uses the Playlists section, whose playlist line
+// has three buttons (main, Edit, Delete) and whose other lines have one.
+test('navigation: Up and Down return to the same button after a shorter row', async ({ page }) => {
+    await open(page);
+    await page.click('#navSettings');
+    await press(page, KEY.RIGHT);   // into the section list
+    await press(page, KEY.RIGHT);   // into the rows of Playlists
+    const focusedText = () => page.evaluate(() => {
+        const el = document.querySelector('.focused');
+        return el ? el.textContent.trim() : null;
+    });
+    // Step to the playlist line's last button (Delete).
+    await press(page, KEY.RIGHT);
+    await press(page, KEY.RIGHT);
+    const before = await focusedText();
+    expect(before).toBeTruthy();
+    await press(page, KEY.DOWN);
+    await press(page, KEY.UP);
+    expect(await focusedText()).toBe(before);
+});
+
 test('report a problem: the drawn QR code opens a filled-in GitHub issue, with logins cut out', async ({ page }) => {
     await page.addInitScript(() => {
         localStorage.setItem('iptv_log', JSON.stringify([

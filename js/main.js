@@ -327,6 +327,11 @@
         row: 0,
         col: 0,
 
+        // The column the remote last chose with Left or Right. Up and Down
+        // return to it, so a short row in between does not move the focus
+        // to the wrong button.
+        wantCol: 0,
+
         setZone: function (name, row, col) {
             // The menu folds into a small capsule while the remote is elsewhere
             // (a dialog leaves it as it was).
@@ -336,6 +341,7 @@
             this.currentZone = name;
             this.row = row || 0;
             this.col = col || 0;
+            this.wantCol = this.col;
             this.apply();
         },
 
@@ -373,17 +379,22 @@
             var rowArr = matrix[this.row] || [];
 
             if (dir === 'left') {
-                if (this.col > 0) { this.col--; this.apply(); }
+                if (this.col > 0) { this.col--; this.wantCol = this.col; this.apply(); }
                 else if (zone.onEdge) zone.onEdge('left');
             } else if (dir === 'right') {
-                if (this.col < rowArr.length - 1) { this.col++; this.apply(); }
+                if (this.col < rowArr.length - 1) { this.col++; this.wantCol = this.col; this.apply(); }
                 else if (zone.onEdge) zone.onEdge('right');
-            } else if (dir === 'up') {
-                if (this.row > 0) { this.row--; this.apply(); }
-                else if (zone.onEdge) zone.onEdge('up');
-            } else if (dir === 'down') {
-                if (this.row < matrix.length - 1) { this.row++; this.apply(); }
-                else if (zone.onEdge) zone.onEdge('down');
+            } else if (dir === 'up' || dir === 'down') {
+                var next = this.row + (dir === 'up' ? -1 : 1);
+                if (next < 0 || next >= matrix.length) {
+                    if (zone.onEdge) zone.onEdge(dir);
+                    return;
+                }
+                // Same column as before, or the last button of a shorter row.
+                this.row = next;
+                var nextRow = matrix[next] || [];
+                this.col = Math.max(0, Math.min(this.wantCol, nextRow.length - 1));
+                this.apply();
             }
         },
 
