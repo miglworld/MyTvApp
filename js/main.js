@@ -49,7 +49,7 @@
     // ==========================================================================
     // Config / constants
     // ==========================================================================
-    var APP_VERSION = '0.13.9';
+    var APP_VERSION = '0.13.10';
     var PLAYLISTS_KEY = 'iptv_playlists';
     var ACTIVE_PLAYLISTS_KEY = 'iptv_active_playlist_id';
     var FAVORITES_KEY = 'iptv_favorites';
@@ -1264,7 +1264,7 @@
             hint.className = 'empty-hint';
             hint.textContent = state.section.type === 'favorites'
                 ? 'No favorites yet. Press ▶ on a channel to add it.'
-                : 'No channels yet. Add or switch on a playlist in Settings.';
+                : (state.partial ? 'Reading the channels…' : 'No channels yet. Add or switch on a playlist in Settings.');
             box.appendChild(hint);
             updateLiveInfo();
             return;
@@ -1863,6 +1863,7 @@
     // state.channels is always the active playlists' channels, in the order
     // the playlists are listed in Settings.
     function rebuildChannels() {
+        if (state.partial) { drawFirstChannels(); return; }
         var all = [];
         state.playlists.forEach(function (pl) {
             var list = state.channelsByPlaylist[pl.id];
@@ -1895,12 +1896,32 @@
         refreshLiveList(false);
     }
 
+    // While the start-up still reads (state.partial): the channels read so far
+    // of the active playlists, without categories, copy groups or a count.
+    // A setting changed in that time (a playlist switch, hiding tagged
+    // channels) is drawn from here, and the full rebuild follows when the
+    // reading ends.
+    function drawFirstChannels() {
+        var all = [];
+        state.playlists.forEach(function (pl) {
+            var list = state.channelsByPlaylist[pl.id];
+            if (list && state.activePlaylistIds.indexOf(pl.id) !== -1) all = all.concat(list);
+        });
+        if (taggedMode === 'hide') all = all.filter(function (ch) { return !isTagged(ch); });
+        labelClashes(all);
+        state.channels = all;
+        state.categories = [];
+        state.copyGroups = Object.create(null);
+        if (state.section.type !== 'favorites') state.section = { type: 'all' };
+        refreshLiveList(false);
+    }
+
     // Start of the app: every active playlist comes from its stored copy when
     // there is one, otherwise from the network. One bad playlist shows an
     // error for itself without blanking out the others.
     //
     // First screen first: a big playlist takes long to read and sort, so the
-    // first channels of the first playlist are drawn as soon as they are read
+    // first channels of each playlist are drawn as soon as they are read
     // (state.partial is true), and the rest is read in small steps, so a key
     // press never waits long. When all is read, the full path runs as before.
     // What waits for the whole list: the channel count, the categories and the
@@ -1922,10 +1943,12 @@
         }
 
         function show() {
+            var wasPartial = state.partial;
             state.partial = false;
             rebuildChannels();
             showLoading(false);
             showScreen0();
+            if (wasPartial) refreshSettings();   // the playlist counts were held back
             if (options.after) options.after();
         }
 
@@ -1941,11 +1964,15 @@
                 if (r.error) failures.push(r.pl.name + ': ' + r.error.message); else good.push(r);
             });
 
+            // A playlist switched off, reloaded or deleted while reading no
+            // longer has these channels: its reading stops.
+            function current(r) { return state.channelsByPlaylist[r.pl.id] === r.channels; }
+
             function finish() {
                 var total = 0;
                 var stored = 0;
                 good.forEach(function (r) {
-                    state.channelsByPlaylist[r.pl.id] = r.channels;
+                    if (!current(r)) return;
                     total += r.channels.length;
                     if (r.cached) stored++;
                 });
@@ -1959,7 +1986,7 @@
                 // Stored copies that are getting old: fetch a fresh one, a little
                 // after the start so it does not compete with the first screen.
                 good.forEach(function (r) {
-                    if (r.cached && Date.now() - r.cached.time > PLAYLIST_MAX_AGE_MS) {
+                    if (current(r) && r.cached && Date.now() - r.cached.time > PLAYLIST_MAX_AGE_MS) {
                         setTimeout(function () { refreshInBackground(r.pl, r.cached.text); }, PLAYLIST_REFRESH_DELAY_MS);
                     }
                 });
@@ -1969,7 +1996,7 @@
             // lets the remote and the screen have a turn.
             var at = 0;
             function readMore() {
-                while (at < good.length && good[at].reader.done()) { good[at].reader = null; at++; }
+                while (at < good.length && (!current(good[at]) || good[at].reader.done())) { good[at].reader = null; at++; }
                 if (at >= good.length) { finish(); return; }
                 var r = good[at];
                 var more = r.reader.next(CHUNK_CHANNELS);
@@ -1978,19 +2005,15 @@
                 setTimeout(readMore, 0);
             }
 
+            // Each playlist's list is stored now and grows in place as it is read.
+            good.forEach(function (r) { state.channelsByPlaylist[r.pl.id] = r.channels; });
             var pending = good.some(function (r) { return !r.reader.done(); });
             if (!pending) { finish(); return; }
 
-            // First draw: the first channels of the first playlist that has any.
+            // First draw: the first channels of each playlist.
             state.partial = true;
-            var firstList = good[0].channels.slice();
-            if (taggedMode === 'hide') firstList = firstList.filter(function (ch) { return !isTagged(ch); });
-            labelClashes(firstList);
-            state.channels = firstList;
-            state.categories = [];
-            state.copyGroups = Object.create(null);
             state.section = { type: 'all' };
-            refreshLiveList(false);
+            drawFirstChannels();
             showLoading(false);
             showScreen0();
             setTimeout(readMore, 0);
@@ -2704,7 +2727,7 @@
         text.appendChild(url);
         main.appendChild(text);
         var count = state.channelsByPlaylist[pl.id];
-        if (isActive && count) {
+        if (isActive && count && !state.partial) {
             var n = document.createElement('span');
             n.className = 'setting-value';
             n.textContent = count.length + ' channels';
@@ -3345,6 +3368,8 @@
     function restoreLastChannel() {
         var saved = readStoredJson(LAST_CHANNEL_KEY, null);
         if (!saved || !saved.url || activeScreenId() !== 'screen-live' || state.fullscreen) return;
+        // Someone already used the remote on the first channels: keep what they chose.
+        if (keyWhileReading) { logEvent('last channel not restored: a key was pressed while the channels were read'); return; }
 
         var section = null;
         if (saved.context === 'favorites' && indexByUrl(visibleFavorites(), saved.url) !== -1) {
@@ -3385,6 +3410,8 @@
     // Set while the channel chosen at the start has not proved itself (a
     // picture for 5 s, or any key press).
     var reopenPending = false;
+    // Set by a key press while the start-up still reads the channels.
+    var keyWhileReading = false;
     function clearReopenPending() {
         if (!reopenPending) return;
         reopenPending = false;
@@ -4078,6 +4105,7 @@
         var kc = event.keyCode;
         if ((kc >= 37 && kc <= 40) || kc === KEYCODE.ENTER || kc === KEYCODE.BACK) event.preventDefault();
         clearReopenPending();   // a key press: the app is alive and someone is using it
+        if (state.partial) keyWhileReading = true;
 
         var onPlayer = document.getElementById('screen-player').classList.contains('active');
 
