@@ -8,6 +8,8 @@ A live TV player for Samsung Smart TVs. It plays the channels of your M3U playli
 
 **[Download the latest package](https://github.com/miglworld/MyTvApp/releases/latest)** · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Why it is built this way](docs/decisions.md)
 
+Licence: all rights reserved. See [LICENSE](LICENSE).
+
 > The screenshots use a demo playlist with invented channels and programmes, and a drawn picture in place of video.
 
 ## Contents
@@ -24,6 +26,8 @@ A live TV player for Samsung Smart TVs. It plays the channels of your M3U playli
 ## What it does
 
 No accounts, no sign-up, no analytics. The app contacts only your playlist servers, GitHub (for updates and the programme guide) and iptv-org (for the two preset playlists).
+
+Checked by the project's own tools: 110 automated tests (unit, integration and browser), and a benchmark that parses a 13,000-channel playlist ([perf/bench.js](perf/bench.js)). Run them with `npm test` and `npx playwright test`.
 
 | | |
 |---|---|
