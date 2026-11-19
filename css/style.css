@@ -1555,7 +1555,9 @@ html.video-full .sidebar {
 	align-items: flex-end;
 	justify-content: space-between;
 	padding: 56px 72px 92px;
-	background: linear-gradient(0deg, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.45) 22%, rgba(0, 0, 0, 0) 46%);
+	/* Shown only with the info: dark enough at the bottom for the grey lines
+	   and the key hints to read over a bright picture, fading out smoothly. */
+	background: linear-gradient(0deg, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.84) 22%, rgba(0, 0, 0, 0.55) 42%, rgba(0, 0, 0, 0.2) 58%, rgba(0, 0, 0, 0) 72%);
 	opacity: 0;
 	pointer-events: none;
 	transition: opacity 0.25s ease;

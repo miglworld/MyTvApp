@@ -737,3 +737,20 @@ test('report notice: waits while a channel is full screen, and Back means Not no
     await expect(page.locator('#reportNotice')).toBeHidden();
     expect(await activeScreen(page)).toBe('screen-live');
 });
+
+// The dark shade behind the full-screen info is part of the info: it shows
+// with it and goes with it, so the picture is clear the rest of the time.
+test('full screen: the dark shade shows only while the channel info is on screen', async ({ page }) => {
+    await open(page);
+    await press(page, KEY.OK);
+    await expect(page.locator('#screen-player')).toHaveClass(/active/);
+    const shade = () => page.evaluate(() => {
+        const o = document.getElementById('playerOverlay');
+        const cs = getComputedStyle(o);
+        return { visible: o.classList.contains('visible'), opacity: cs.opacity, gradient: cs.backgroundImage.indexOf('linear-gradient') !== -1 };
+    });
+    await press(page, KEY.RIGHT);   // the info bar
+    await expect.poll(shade).toEqual({ visible: true, opacity: '1', gradient: true });
+    // The info hides by itself a few seconds after the picture plays; the shade goes with it.
+    await expect.poll(shade, { timeout: 15000 }).toEqual({ visible: false, opacity: '0', gradient: true });
+});
