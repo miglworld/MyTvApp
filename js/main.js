@@ -49,7 +49,7 @@
     // ==========================================================================
     // Config / constants
     // ==========================================================================
-    var APP_VERSION = '0.13.6';
+    var APP_VERSION = '0.13.7';
     var PLAYLISTS_KEY = 'iptv_playlists';
     var ACTIVE_PLAYLISTS_KEY = 'iptv_active_playlist_id';
     var FAVORITES_KEY = 'iptv_favorites';
@@ -591,12 +591,11 @@
         syncMenuDim();
     }
 
-    // Dims the picture behind the menu and behind Settings and Add Playlist,
-    // so their text reads clearly. The channel list keeps the picture bright.
+    // Dims the picture behind the menu, so its text reads clearly. Settings,
+    // Add Playlist and the channel list keep the picture bright: their panels
+    // are dark enough on their own.
     function syncMenuDim() {
-        var screen = activeScreenId();
-        var on = Focus.currentZone === 'sideMenu' || screen === 'screen-settings' || screen === 'screen-add';
-        document.documentElement.classList.toggle('menu-dim', on);
+        document.documentElement.classList.toggle('menu-dim', Focus.currentZone === 'sideMenu');
     }
 
     function activeScreenId() {
