@@ -219,6 +219,16 @@ window.onerror = function (msg, file, line) {
 			</div>
 		</div>
 
+		<!-- An app error offers here, once per start, to report it from the phone. -->
+		<div class="notice" id="reportNotice" role="status" aria-live="polite" hidden>
+			<div class="notice-title">Something went wrong</div>
+			<div class="notice-text">Report it from your phone? The report lists what the app did, without your playlist logins.</div>
+			<div class="notice-actions">
+				<button class="notice-btn" id="reportLaterBtn" tabindex="-1">Not now</button>
+				<button class="notice-btn" id="reportNowBtn" tabindex="-1">Report</button>
+			</div>
+		</div>
+
 		<!-- ===================== Confirm Dialog ===================== -->
 		<div class="modal-overlay" id="confirmModal" role="alertdialog" aria-modal="true" aria-describedby="confirmMessage" hidden>
 			<div class="modal-box">

@@ -2,6 +2,9 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.13.5 (dev branch, not released yet)
+- When the app hits an error, a notice in the corner offers to report it: **Report** opens Settings, Report a problem, with its QR code. It asks once per start and waits while a channel is full screen. A channel that does not play does not ask.
+
 ## v0.13.4 (dev branch, not released yet)
 - Fixed: when the Samsung player could not open a channel, a second error it sent while closing made the app skip the TV player and go straight to hls.js. The TV player now gets its turn.
 

@@ -703,3 +703,37 @@ test('xtream: a wrong password says so, and the password is not shown or kept in
     expect(await page.evaluate(() => document.body.innerText)).not.toContain('Wr0ng-Pass9');
     expect(await page.evaluate(() => localStorage.getItem('iptv_log') || '')).not.toContain('Wr0ng-Pass9');
 });
+
+// An app error offers to report it, once per start, in the update notice's corner.
+test('report notice: an app error offers a report once, and Report opens Report a problem', async ({ page }) => {
+    await open(page);
+    await expect(page.locator('#reportNotice')).toBeHidden();
+    await page.evaluate(() => window.MYTVAPP_ERROR('test failure'));
+    await expect(page.locator('#reportNotice')).toBeVisible();
+    await expect(page.locator('#reportNowBtn')).toHaveClass(/focused/);
+    await press(page, KEY.OK);
+    expect(await activeScreen(page)).toBe('screen-settings');
+    await expect(page.locator('.report-layout')).toBeVisible();
+    await expect(page.locator('#reportNotice')).toBeHidden();
+
+    // A second error in the same start does not ask again.
+    await press(page, KEY.BACK);
+    await page.evaluate(() => window.MYTVAPP_ERROR('second failure'));
+    await page.waitForTimeout(800);
+    await expect(page.locator('#reportNotice')).toBeHidden();
+});
+
+test('report notice: waits while a channel is full screen, and Back means Not now', async ({ page }) => {
+    await open(page);
+    await press(page, KEY.OK);
+    await expect(page.locator('#screen-player')).toHaveClass(/active/);
+    await page.evaluate(() => window.MYTVAPP_ERROR('error while watching'));
+    await page.waitForTimeout(400);
+    await expect(page.locator('#reportNotice')).toBeHidden();
+
+    await press(page, KEY.BACK);   // leave full screen
+    await expect(page.locator('#reportNotice')).toBeVisible();
+    await press(page, KEY.BACK);   // Not now
+    await expect(page.locator('#reportNotice')).toBeHidden();
+    expect(await activeScreen(page)).toBe('screen-live');
+});
