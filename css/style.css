@@ -1492,6 +1492,13 @@ html.avplay-active #videoPlayer {
 	visibility: hidden;
 }
 
+/* The other way round: when the TV player or hls.js plays (the Samsung
+   player failed or is not used), the Samsung player's object is positioned
+   above the <video> and would cover its picture while the sound plays. */
+html:not(.avplay-active) #avPlayer {
+	visibility: hidden;
+}
+
 /* Full screen: nothing but the picture and the player's own overlays. */
 html.video-full .sidebar {
 	visibility: hidden;

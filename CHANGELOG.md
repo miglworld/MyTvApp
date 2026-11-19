@@ -2,6 +2,9 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.12.15 (dev branch, not released yet)
+- Fixed: a channel the Samsung player could not open, and the TV player or hls.js played instead, could play sound with no picture, because the Samsung player's surface stayed over the picture. It is now hidden whenever another player plays.
+
 ## v0.12.14 (dev branch, not released yet)
 - Channel names no longer show "[Geo-blocked]" or "[Not 24/7]". These marks are now small tags under the channel's name in full screen. They still dim or hide the channel as set in Settings, Channels. Favorites saved with a mark in their name lose it the same way.
 
