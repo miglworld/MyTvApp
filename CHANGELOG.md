@@ -2,6 +2,9 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.13.8 (dev branch, not released yet)
+- The nearly solid panels of 0.13.7 were too dark on the TV. Panels are back to the earlier glass (66% on the TV), now the same on every page, Settings and the TV Guide included. The picture behind Settings stays undimmed.
+
 ## v0.13.7 (dev branch, not released yet)
 - One panel look on every page: the channel list, TV Guide, Settings and the Add screens share the same darker glass. Settings was lighter than the rest and let the picture tint it.
 - On the TV, while the Samsung player shows the picture, every panel (and the menu, notices and toasts) is nearly solid. The TV showed see-through panels much lighter than they are, with a lavender wash.

@@ -269,23 +269,9 @@ html:not(.avplay-active) .favorite-btn {
 	backdrop-filter: blur(34px) saturate(1.7);
 }
 
-/* The screens' own panels (channel list, TV Guide, Settings and the Add
-   screens) share one calm, darker glass, so every page looks the same over
-   the picture and its text reads without dimming the picture. */
-html:not(.avplay-active) .live-channels,
-html:not(.avplay-active) .guide-panel,
-html:not(.avplay-active) .settings-cats,
-html:not(.avplay-active) .settings-main,
-html:not(.avplay-active) .add-playlist-panel {
-	background: rgba(18, 18, 22, 0.8);
-	background: linear-gradient(140deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 26%, rgba(255, 255, 255, 0.02) 100%), rgba(18, 18, 22, 0.8);
-}
-
 /* While the Samsung player plays, it draws the picture on its own plane under
-   the page, and the TV blends see-through panels over it much lighter than a
-   browser does: an 80% panel looked about half see-through, and a 62% black
-   veil showed as a light lavender wash. So on the TV every panel is nearly
-   solid, the same on every page, with only a faint highlight. */
+   the page, so the blur above cannot work. Every panel then has the same
+   firmer glass, on every page (Settings and the TV Guide included). */
 html.avplay-active .sidebar,
 html.avplay-active .notice,
 html.avplay-active .channel-panel,
@@ -298,8 +284,8 @@ html.avplay-active .guide-panel,
 html.avplay-active .settings-cats,
 html.avplay-active .settings-main,
 html.avplay-active .add-playlist-panel {
-	background: rgba(18, 18, 22, 0.92);
-	background: linear-gradient(140deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.03) 26%, rgba(255, 255, 255, 0.01) 100%), rgba(18, 18, 22, 0.92);
+	background: rgba(22, 22, 26, 0.66);
+	background: linear-gradient(140deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.06) 26%, rgba(255, 255, 255, 0.02) 62%, rgba(255, 255, 255, 0.08) 100%), rgba(22, 22, 26, 0.66);
 }
 
 /* What is selected while the remote is elsewhere: a faint glass plate. */
