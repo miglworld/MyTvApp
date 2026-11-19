@@ -276,7 +276,7 @@ test('markup in playlist names is shown as text and runs nothing', async ({ page
     expect(await page.locator('#app img[src="x"]').count()).toBe(0);
 });
 
-test('channel names: quality tags are not shown, and the Geo-blocked mark still dims the channel', async ({ page }) => {
+test('channel names: quality tags and the Geo-blocked mark are not shown, and the mark still dims the channel and shows as a tag in full screen', async ({ page }) => {
     await open(page, { routes: {
         'https://example.com/playlists/demo.m3u': {
             status: 200, type: 'audio/x-mpegurl',
@@ -289,8 +289,23 @@ test('channel names: quality tags are not shown, and the Geo-blocked mark still 
     const rows = page.locator('.live-row');
     await expect(rows.first()).toContainText('Aurora News');
     await expect(rows.first()).not.toContainText('FHD');
-    await expect(rows.nth(1)).toContainText('Meridian 24 [Geo-blocked]');
+    await expect(rows.nth(1)).toContainText('Meridian 24');
+    await expect(rows.nth(1)).not.toContainText('Geo-blocked');
     await expect(rows.nth(1)).toHaveClass(/dim/);
+
+    // Full screen: the tag shows under the name; a channel without marks has none.
+    await press(page, KEY.DOWN);
+    await press(page, KEY.OK);
+    await expect(page.locator('#screen-player')).toHaveClass(/active/);
+    await expect(page.locator('#nowPlayingName')).toHaveText('Meridian 24');
+    await expect(page.locator('#nowPlayingTags .channel-tag')).toHaveText(['Geo-blocked']);
+    await page.screenshot({ path: test.info().outputPath('full-screen-tag.png') });
+    await press(page, KEY.BACK);
+    await press(page, KEY.UP);
+    await press(page, KEY.OK);
+    await expect(page.locator('#screen-player')).toHaveClass(/active/);
+    await expect(page.locator('#nowPlayingName')).toHaveText('Aurora News');
+    await expect(page.locator('#nowPlayingTags')).toBeHidden();
 });
 
 test('copies: when the first copy of a channel cannot play, the next copy plays and the app says so', async ({ page }) => {
