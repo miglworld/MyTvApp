@@ -31,3 +31,6 @@ zap-report.html
 lighthouse/
 .lighthouseci/
 zap-report.json
+
+# Local handover note: kept on this computer only, not in git
+HANDOVER.md
