@@ -1,5 +1,7 @@
 # MyTvApp
 
+The IPTV player for Samsung Tizen TVs: your M3U playlists, the TV remote, and updates from GitHub.
+
 [![Latest release](https://img.shields.io/github/v/release/miglworld/MyTvApp?label=release)](https://github.com/miglworld/MyTvApp/releases/latest) ![Platform: Samsung Tizen](https://img.shields.io/badge/platform-Samsung%20Tizen-1428A0) [![Check](https://github.com/miglworld/MyTvApp/actions/workflows/check.yml/badge.svg?branch=main)](https://github.com/miglworld/MyTvApp/actions/workflows/check.yml) [![CodeQL](https://github.com/miglworld/MyTvApp/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/miglworld/MyTvApp/actions/workflows/codeql.yml) ![Licence: all rights reserved](https://img.shields.io/badge/licence-all%20rights%20reserved-lightgrey)
 
 A live TV player for Samsung Smart TVs. It plays the channels of your M3U playlists, shows what is on now and next, and is driven entirely with the TV remote.
@@ -22,6 +24,8 @@ Licence: all rights reserved. See [LICENSE](LICENSE).
 - [Programme guide](#programme-guide)
 - [Development](#development)
 - [Credits and license](#credits-and-license)
+
+> Looking for an M3U player for your Samsung TV? MyTvApp plays playlists you already have, with the remote. It does not provide channels or playlists.
 
 ## What it does
 
