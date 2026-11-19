@@ -2,6 +2,10 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.13.6 (dev branch, not released yet)
+- Tests: the speed budget test slows every machine to the same reference speed (the owner's Mac slowed six times), measured by a short workload first, so a slower GitHub runner is not judged more harshly. The 500 ms and 300 ms limits are unchanged.
+- Full screen: a darker, taller shade rises from the bottom while the channel info is on screen, so its text and the key hints read over a bright picture. It goes when the info does.
+
 ## v0.13.5 (dev branch, not released yet)
 - When the app hits an error, a notice in the corner offers to report it: **Report** opens Settings, Report a problem, with its QR code. It asks once per start and waits while a channel is full screen. A channel that does not play does not ask.
 
