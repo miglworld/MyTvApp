@@ -42,7 +42,7 @@
     // ==========================================================================
     // Config / constants
     // ==========================================================================
-    var APP_VERSION = '0.13.0';
+    var APP_VERSION = '0.13.1';
     var PLAYLISTS_KEY = 'iptv_playlists';
     var ACTIVE_PLAYLISTS_KEY = 'iptv_active_playlist_id';
     var FAVORITES_KEY = 'iptv_favorites';
@@ -266,9 +266,15 @@
 
     // Quality shown in a toast, read from the name the playlist gave.
     function qualityLabel(ch) {
-        var m = /\b(FHD|UHD|HD|SD|4K|\d{3,4}p)\b/i.exec(ch.rawName || ch.name || '');
+        return qualityIn(ch.rawName || ch.name || '');
+    }
+
+    function qualityIn(name) {
+        var m = /\b(FHD|UHD|HD|SD|4K|\d{3,4}p)\b/i.exec(name);
         if (!m) return '';
-        return /^\d/.test(m[1]) ? m[1].toLowerCase() : m[1].toUpperCase();
+        var q = m[1];
+        var c = q.charCodeAt(0);
+        return c >= 48 && c <= 57 ? q.toLowerCase() : q.toUpperCase();
     }
 
     // Channels whose cleaned names are the same get their quality in brackets,
@@ -338,13 +344,8 @@
         }
         return logLines;
     }
-    // The passwords of the saved Xtream accounts: kept out of the diagnostics.
-    function savedPasswords() {
-        var list = (state && state.playlists) || [];
-        return list.filter(function (p) { return p.type === 'xtream'; }).map(function (p) { return p.password; });
-    }
     function logEvent(msg) {
-        msg = maskSecrets(msg, savedPasswords());
+        msg = maskSecrets(msg);
         var d = new Date();
         var two = function (n) { return (n < 10 ? '0' : '') + n; };
         var lines = readLog();
@@ -356,7 +357,7 @@
     if (window.MYTVAPP_ERROR && !window.MYTVAPP_ERROR.logged) {
         var showError = window.MYTVAPP_ERROR;
         window.MYTVAPP_ERROR = function (text) {
-            text = maskSecrets(text, savedPasswords());
+            text = maskSecrets(text);
             logEvent('ERROR ' + text);
             // Kept on its own as well: the list above is short and moves on.
             writeStored(LAST_ERROR_KEY, new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC \u00b7 ' + APP_VERSION + ' \u00b7 ' + String(text).slice(0, 200));
@@ -1377,8 +1378,31 @@
     // two-letter country prefix ("UK |"), and emoji are taken out, and the
     // spacing tidied. Three-letter prefixes such as "USA |" are kept. If
     // nothing is left, the name as the playlist gave it is used.
+    // Runs for every channel of every playlist, so the common cases are done
+    // with plain string operations and each pattern runs only when the name
+    // has what it looks for (budget: 13,000 names within the start-up time).
+    // "Channel 1 (1080p)" -> "Channel 1": a quality tag in brackets at the end,
+    // after a space (as the full set of steps below would remove it).
+    function withoutTrailingTag(s) {
+        var close = s.charAt(s.length - 1);
+        if (close !== ')' && close !== ']') return s;
+        var open = s.lastIndexOf(close === ')' ? '(' : '[');
+        if (open < 1 || s.charAt(open - 1) !== ' ' || !/^(FHD|UHD|HD|SD|4K|\d{3,4}p)$/i.test(s.slice(open + 1, -1).trim())) return s;
+        s = s.slice(0, open);
+        while (s.charAt(s.length - 1) === ' ') s = s.slice(0, -1);
+        return s;
+    }
+
     function cleanName(raw) {
-        var s = withoutMarks(raw);
+        var s = String(raw || '');
+        // Single spaces and no spaces at the ends, as every later step expects.
+        if (s.indexOf('[') !== -1) s = withoutMarks(s);
+        else s = (/\s\s|[^\S ]/.test(s) ? s.replace(/\s+/g, ' ') : s).trim();
+        s = withoutTrailingTag(s);
+        // Anything left to tidy? One test instead of every step for plain names.
+        if (!/[|\u0080-￿]|\s\s|^[\s\-:·]|[\s\-:·]$|[([]\s*[)\]]|(^|[\s([])(FHD|UHD|HD|SD|4K|\d{3,4}p)(?=$|[\s)\]])/i.test(s)) {
+            return s || String(raw || '').trim();
+        }
         s = s.replace(/^[A-Za-z]{2}\s*\|\s*/, '');
         s = s.replace(/[\uD83C-\uDBFF][\uDC00-\uDFFF]|[☀-➿]|️|‍/g, ' ');
         s = s.replace(/ᴴᴰ|ᶠᴴᴰ/g, ' ');
@@ -1405,20 +1429,26 @@
                 while ((m = attrRegex.exec(line)) !== null) attrs[m[1].toLowerCase()] = m[2];
                 // The name follows the first comma that is outside quotes
                 // (attribute values such as group-title="News, Sport" have commas too).
+                // Jumps from quote to quote instead of reading every character.
                 var comma = -1;
-                var inQuote = false;
-                for (var c = 0; c < line.length; c++) {
-                    var chr = line.charAt(c);
-                    if (chr === '"') inQuote = !inQuote;
-                    else if (chr === ',' && !inQuote) { comma = c; break; }
+                var from = 0;
+                for (;;) {
+                    var nextComma = line.indexOf(',', from);
+                    var nextQuote = line.indexOf('"', from);
+                    if (nextComma === -1) break;
+                    if (nextQuote === -1 || nextComma < nextQuote) { comma = nextComma; break; }
+                    var closeQuote = line.indexOf('"', nextQuote + 1);
+                    if (closeQuote === -1) break;   // an unclosed quote: no comma outside quotes
+                    from = closeQuote + 1;
                 }
                 if (comma === -1) comma = line.lastIndexOf(',');
                 var name = comma === -1 ? '' : line.slice(comma + 1).trim();
+                var clean = cleanName(name) || 'Unnamed Channel';
                 pending = {
-                    name: cleanName(name) || 'Unnamed Channel',
+                    name: clean,
                     // The cleaned name without any quality added by labelClashes().
-                    baseName: cleanName(name) || 'Unnamed Channel',
-                    quality: qualityLabel({ rawName: name }),
+                    baseName: clean,
+                    quality: qualityIn(name),
                     // The name as the playlist gave it: "[Geo-blocked]" is read from this.
                     rawName: name || 'Unnamed Channel',
                     logo: safeLogo(attrs['tvg-logo']),
@@ -1592,17 +1622,16 @@
         });
     }
 
-    // Replaces each secret (as typed, and as written in an address) and any
-    // "password=" value with dots. Used on everything the diagnostics keep.
-    function maskSecrets(text, secrets) {
-        var out = String(text).replace(/(\bpassword=)[^&\s#]*/gi, '$1•••');
-        (secrets || []).forEach(function (secret) {
-            if (!secret) return;
-            [secret, encodeURIComponent(secret)].forEach(function (form) {
-                out = out.split(form).join('•••');
-            });
-        });
-        return out;
+    // Replaces the places where addresses carry a password with dots: any
+    // "password=" value, the password in an Xtream stream address
+    // (/live/USER/PASSWORD/101.ts), and a login written into an address
+    // (http://user:PASSWORD@host). Used on everything the diagnostics keep.
+    // It works from the text alone and never reads the saved passwords.
+    function maskSecrets(text) {
+        return String(text)
+            .replace(/(\bpassword=)[^&\s#]*/gi, '$1•••')
+            .replace(/(\/(?:live|movie|series|timeshift)\/[^/\s?#]+\/)[^/\s?#]+(?=\/)/gi, '$1•••')
+            .replace(/(\/\/[^/\s:@]+:)[^@\s/]+@/g, '$1•••@');
     }
 
     // fetch with a time limit. A request that hangs (no route to the host,

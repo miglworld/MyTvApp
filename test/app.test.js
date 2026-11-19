@@ -264,13 +264,18 @@ test('values from an Xtream server cannot break out of their M3U line', function
     assert.strictEqual(app.parseM3U(app.xtreamM3u('http://iptv.example', 'u', 'p', { user_info: {} }, [])).length, 0);
 });
 
-test('passwords are masked in diagnostics: as typed, encoded, and as a password= value', function () {
-    var out = app.maskSecrets('failed http://h/live/me/s3cr&t/1.ts and http://h/get.php?username=me&password=s3cr%26t&type=m3u_plus, other password=zzz', ['s3cr&t']);
+test('passwords are masked in diagnostics: in stream paths, password= values and logins in addresses', function () {
+    var out = app.maskSecrets('failed http://h/live/me/s3cr&t/1.ts and http://h/get.php?username=me&password=s3cr%26t&type=m3u_plus, other password=zzz');
     assert.ok(out.indexOf('s3cr') === -1, out);
     assert.ok(out.indexOf('zzz') === -1, out);
     assert.match(out, /\/live\/me\/•••\/1\.ts/);
-    assert.strictEqual(app.maskSecrets('nothing secret', ['']), 'nothing secret');
-    assert.strictEqual(app.maskSecrets('no list', undefined), 'no list');
+    assert.strictEqual(app.maskSecrets('http://h:8080/movie/me/pw1/9.mkv http://h/series/me/pw2/7.mp4 http://h/timeshift/me/pw3/60/x.ts'),
+        'http://h:8080/movie/me/•••/9.mkv http://h/series/me/•••/7.mp4 http://h/timeshift/me/•••/60/x.ts');
+    assert.strictEqual(app.maskSecrets('load http://me:pw4@iptv.example:8080/list.m3u'), 'load http://me:•••@iptv.example:8080/list.m3u');
+    // Ordinary addresses and text are left as they are.
+    assert.strictEqual(app.maskSecrets('playing "Live News" from https://cdn.example/live/news/index.m3u8'),
+        'playing "Live News" from https://cdn.example/live/news/index.m3u8');
+    assert.strictEqual(app.maskSecrets('nothing secret'), 'nothing secret');
 });
 
 test('a failed channel is replaced by the next copy of the same channel, in list order', function () {
