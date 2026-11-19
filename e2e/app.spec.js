@@ -287,6 +287,34 @@ test('full screen: the picture is not covered, whether the Samsung player plays 
     expect(await visibility()).toEqual({ samsung: 'hidden', video: 'visible' });
 });
 
+// The channel keeps playing behind Settings and the Add screens. On the TV
+// the Samsung player's picture is an opaque window where its object sits; a
+// browser draws nothing there, so an opaque box in the same place stands in.
+test('add playlist: both Add screens show above the picture that keeps playing behind them', async ({ page }) => {
+    await open(page);
+    await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains('avplay-active'))).toBe(true);
+    await page.evaluate(() => {
+        const plane = document.createElement('div');
+        plane.id = 'videoWindowStandIn';
+        plane.style.cssText = 'position:absolute;left:0;top:0;width:1920px;height:1080px;background:#204060';
+        const player = document.getElementById('screen-player');
+        player.insertBefore(plane, player.firstChild);
+    });
+    const titleOnTop = () => page.evaluate(() => {
+        const r = document.getElementById('addPlaylistTitle').getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + 20, r.top + r.height / 2);
+        return top ? (document.getElementById('screen-add').contains(top) ? 'Add screen' : (top.id || top.tagName)) : 'nothing';
+    });
+    await page.click('#navSettings');
+    await expect(page.locator('#screen-player')).toHaveClass(/preview/);
+    for (const row of ['Add a playlist', 'Add an Xtream Codes account']) {
+        await page.locator('.setting-row', { hasText: row }).click();
+        await expect(page.locator('#screen-add')).toHaveClass(/active/);
+        expect(await titleOnTop(), row).toBe('Add screen');
+        await page.click('#cancelAddBtn');
+    }
+});
+
 test('markup in playlist names is shown as text and runs nothing', async ({ page }) => {
     const hostile = '<img src=x onerror="window.__pwned=1">';
     await open(page, { routes: {
