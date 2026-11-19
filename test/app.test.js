@@ -121,11 +121,16 @@ test('a name that would be empty keeps the name the playlist gave', function () 
     assert.strictEqual(app.cleanName(''), '');
 });
 
-test('a channel keeps the name as given for the Geo-blocked check', function () {
-    var ch = app.parseM3U('#EXTINF:-1,UK | Film Four HD [Geo-blocked]\nhttp://e/a');
-    assert.strictEqual(ch[0].name, 'Film Four [Geo-blocked]');
+test('the Geo-blocked and Not 24/7 marks leave the name and become tags', function () {
+    var ch = app.parseM3U('#EXTINF:-1,UK | Film Four HD [Geo-blocked]\nhttp://e/a\n#EXTINF:-1,RTP 1 [Not 24/7] [geo-blocked]\nhttp://e/b\n#EXTINF:-1,Plain One\nhttp://e/c');
+    assert.strictEqual(ch[0].name, 'Film Four');
     assert.strictEqual(ch[0].rawName, 'UK | Film Four HD [Geo-blocked]');
     assert.strictEqual(app.isTagged(ch[0]), true);
+    assert.deepStrictEqual(app.channelTags(ch[0]), ['Geo-blocked']);
+    assert.strictEqual(ch[1].name, 'RTP 1');
+    assert.deepStrictEqual(app.channelTags(ch[1]), ['Geo-blocked', 'Not 24/7']);
+    assert.deepStrictEqual(app.channelTags(ch[2]), []);
+    assert.deepStrictEqual(app.channelTags({}), []);
 });
 
 test('the identity a playlist gives for a channel', function () {

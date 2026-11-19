@@ -30,7 +30,7 @@
     if (typeof document === 'undefined') {
         if (typeof module !== 'undefined') module.exports = {
             parseM3U: parseM3U, versionNewer: versionNewer, isStreamUrl: isStreamUrl, cleanUserAgent: cleanUserAgent,
-            listWindow: listWindow, guideIndexAt: guideIndexAt, isTagged: isTagged, ago: ago, cleanName: cleanName,
+            listWindow: listWindow, guideIndexAt: guideIndexAt, isTagged: isTagged, channelTags: channelTags, ago: ago, cleanName: cleanName,
             nextCopyFrom: nextCopyFrom, qualityLabel: qualityLabel, labelClashes: labelClashes,
             qrMatrix: qrMatrix, reportLink: reportLink, redactAddresses: redactAddresses,
             normalizeXtreamServer: normalizeXtreamServer, xtreamApiUrl: xtreamApiUrl, xtreamM3u: xtreamM3u,
@@ -42,7 +42,7 @@
     // ==========================================================================
     // Config / constants
     // ==========================================================================
-    var APP_VERSION = '0.12.13';
+    var APP_VERSION = '0.12.14';
     var PLAYLISTS_KEY = 'iptv_playlists';
     var ACTIVE_PLAYLISTS_KEY = 'iptv_active_playlist_id';
     var FAVORITES_KEY = 'iptv_favorites';
@@ -233,6 +233,21 @@
 
     function isTagged(ch) {
         return /\[(geo-blocked|not 24\/7)\]/i.test(ch.rawName || ch.name || '');
+    }
+
+    // The playlist's marks as tags, read from the name it gave. They are
+    // taken out of the name on screen and shown small in full screen.
+    function channelTags(ch) {
+        var raw = ch.rawName || ch.name || '';
+        var tags = [];
+        if (/\[\s*geo-blocked\s*\]/i.test(raw)) tags.push('Geo-blocked');
+        if (/\[\s*not 24\/7\s*\]/i.test(raw)) tags.push('Not 24/7');
+        return tags;
+    }
+
+    // A name without "[Geo-blocked]" and "[Not 24/7]".
+    function withoutMarks(name) {
+        return String(name || '').replace(/\[\s*(geo-blocked|not 24\/7)\s*\]/gi, ' ').replace(/\s+/g, ' ').trim();
     }
 
     // The next copy of a channel to try after a failure: from the copies that
@@ -1363,7 +1378,7 @@
     // spacing tidied. Three-letter prefixes such as "USA |" are kept. If
     // nothing is left, the name as the playlist gave it is used.
     function cleanName(raw) {
-        var s = String(raw || '');
+        var s = withoutMarks(raw);
         s = s.replace(/^[A-Za-z]{2}\s*\|\s*/, '');
         s = s.replace(/[\uD83C-\uDBFF][\uDC00-\uDFFF]|[☀-➿]|️|‍/g, ' ');
         s = s.replace(/ᴴᴰ|ᶠᴴᴰ/g, ' ');
@@ -1857,9 +1872,11 @@
             var raw = localStorage.getItem(FAVORITES_KEY);
             state.favorites = raw ? JSON.parse(raw) : [];
         } catch (e) { state.favorites = []; }
-        // Favorites saved before names were cleaned keep their old name.
+        // Favorites saved before names were cleaned keep their old name, and
+        // ones saved with the marks in their name lose them (they are tags now).
         state.favorites.forEach(function (f) {
             if (!f.rawName) { f.rawName = f.name; f.name = cleanName(f.name) || f.name; }
+            f.name = withoutMarks(f.name) || f.name;
         });
     }
 
@@ -3199,6 +3216,15 @@
         state.quality = '';
 
         document.getElementById('nowPlayingName').textContent = ch.name;
+        var tagsEl = document.getElementById('nowPlayingTags');
+        tagsEl.textContent = '';
+        channelTags(ch).forEach(function (tag) {
+            var t = document.createElement('span');
+            t.className = 'channel-tag';
+            t.textContent = tag;
+            tagsEl.appendChild(t);
+        });
+        tagsEl.hidden = !tagsEl.firstChild;
         document.getElementById('nowPlayingNumber').textContent = ch.number ? String(ch.number) : '';
         showOverlayProgramme();
         var logoEl = document.getElementById('nowPlayingLogo');

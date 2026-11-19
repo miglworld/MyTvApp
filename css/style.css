@@ -1663,6 +1663,26 @@ html.video-full .sidebar {
 	color: #c7c7cc;
 }
 
+.now-playing-tags {
+	display: flex;
+	margin-top: 12px;
+}
+
+.now-playing-tags[hidden] {
+	display: none;
+}
+
+.channel-tag {
+	font-size: 18px;
+	font-weight: 600;
+	line-height: 1;
+	color: #e5e5ea;
+	padding: 6px 12px;
+	margin-right: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.32);
+	border-radius: 999px;
+}
+
 .favorite-btn {
 	display: flex;
 	align-items: center;

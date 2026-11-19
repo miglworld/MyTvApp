@@ -2,6 +2,9 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.12.14 (dev branch, not released yet)
+- Channel names no longer show "[Geo-blocked]" or "[Not 24/7]". These marks are now small tags under the channel's name in full screen. They still dim or hide the channel as set in Settings, Channels. Favorites saved with a mark in their name lose it the same way.
+
 ## v0.12.13 (dev branch, not released yet)
 - Channels whose names are the same after tidying get their quality in brackets, so "BBC One FHD" and "BBC One SD" show as "BBC One (FHD)" and "BBC One (SD)". Copies are still matched by their plain name, so copy switching is unchanged. Two channels with the same name and no quality stay the same.
 
