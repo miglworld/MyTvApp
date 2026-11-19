@@ -49,7 +49,7 @@
     // ==========================================================================
     // Config / constants
     // ==========================================================================
-    var APP_VERSION = '0.13.4';
+    var APP_VERSION = '0.13.5';
     var PLAYLISTS_KEY = 'iptv_playlists';
     var ACTIVE_PLAYLISTS_KEY = 'iptv_active_playlist_id';
     var FAVORITES_KEY = 'iptv_favorites';
@@ -389,6 +389,8 @@
             // Kept on its own as well: the list above is short and moves on.
             writeStored(LAST_ERROR_KEY, new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC \u00b7 ' + APP_VERSION + ' \u00b7 ' + String(text).slice(0, 200));
             showError(text);
+            // Later, so an error during start-up does not run code that is not set up yet.
+            setTimeout(function () { try { offerReport(); } catch (e) { /* the app did not start */ } }, 0);
         };
         window.MYTVAPP_ERROR.logged = true;
     }
@@ -425,7 +427,7 @@
         setZone: function (name, row, col) {
             // The menu folds into a small capsule while the remote is elsewhere
             // (a dialog leaves it as it was).
-            if (name !== 'confirmActions' && name !== 'updateNotice') {
+            if (name !== 'confirmActions' && name !== 'updateNotice' && name !== 'reportNotice') {
                 document.getElementById('sidebar').classList.toggle('collapsed', name !== 'sideMenu');
             }
             this.currentZone = name;
@@ -2850,13 +2852,63 @@
         return true;
     }
 
-    function closeUpdateNotice() {
-        document.getElementById('updateNotice').hidden = true;
+    function closeNotice(id) {
+        document.getElementById(id).hidden = true;
         if (noticeReturnZone) Focus.setZone(noticeReturnZone.name, noticeReturnZone.row, noticeReturnZone.col);
         noticeReturnZone = null;
         if (Focus.currentZone === 'liveList') renderLiveList();
         if (Focus.currentZone === 'guideGrid') renderGuide();
     }
+
+    function closeUpdateNotice() {
+        closeNotice('updateNotice');
+        setTimeout(askAboutReport, 600);   // an error that waited behind the update notice
+    }
+
+    // An app error (an "ERROR" line in the diagnostics) offers, in the same
+    // corner, to report it from the phone. Once per start; it waits like the
+    // update notice and never covers it. A channel that does not play is not
+    // an app error and does not ask.
+    var reportPending = false;
+    var reportAsked = false;
+    var REPORT_SECTION = SETTINGS_SECTIONS.indexOf('Report a problem');
+
+    Focus.zones.reportNotice = {
+        getMatrix: function () {
+            return [[document.getElementById('reportLaterBtn'), document.getElementById('reportNowBtn')]];
+        }
+    };
+
+    function offerReport() {
+        if (reportAsked) return;
+        reportPending = true;
+        askAboutReport();
+    }
+
+    // Returns true when the notice was put on screen.
+    function askAboutReport() {
+        if (!reportPending || reportAsked) return false;
+        if (state.fullscreen || activeScreenId() === 'screen-add' || !document.getElementById('confirmModal').hidden) return false;
+        if (!document.getElementById('updateNotice').hidden) return false;
+        reportPending = false;
+        reportAsked = true;
+        // Already on Report a problem: nothing to ask.
+        if (activeScreenId() === 'screen-settings' && state.settingsSection === REPORT_SECTION) return false;
+        noticeReturnZone = { name: Focus.currentZone, row: Focus.row, col: Focus.col };
+        document.getElementById('reportNotice').hidden = false;
+        Focus.setZone('reportNotice', 0, 1);   // on "Report"
+        return true;
+    }
+
+    document.getElementById('reportLaterBtn').addEventListener('click', function () { closeNotice('reportNotice'); });
+    document.getElementById('reportNowBtn').addEventListener('click', function () {
+        document.getElementById('reportNotice').hidden = true;
+        noticeReturnZone = null;
+        switchToScreen('screen-settings');
+        state.settingsSection = REPORT_SECTION;
+        renderSettings();
+        Focus.setZone('settingsCats', REPORT_SECTION, 0);
+    });
 
     document.getElementById('updateNowBtn').addEventListener('click', function () { location.reload(); });
     document.getElementById('updateLaterBtn').addEventListener('click', function () {
@@ -3113,6 +3165,7 @@
         // Opened from the TV Guide: back to it, on the channel that is playing.
         if (state.fullFrom === 'screen-guide' && state.guideList.length) {
             setTimeout(askAboutUpdate, 600);
+            setTimeout(askAboutReport, 700);
             showScreen('screen-guide');
             var row = state.nowPlaying ? indexByUrl(state.guideList, state.nowPlaying.url) : -1;
             if (row !== -1) state.guideRow = row;
@@ -3124,6 +3177,7 @@
         }
 
         setTimeout(askAboutUpdate, 600);   // an update that arrived while watching
+        setTimeout(askAboutReport, 700);   // an error that happened while watching
 
         showScreen('screen-live');
         // Zapped to a channel outside the section that was showing: show them all.
@@ -3853,6 +3907,7 @@
     function handleBack() {
         if (!document.getElementById('confirmModal').hidden) { hideConfirm(); return; }
         if (!document.getElementById('updateNotice').hidden) { document.getElementById('updateLaterBtn').click(); return; }
+        if (!document.getElementById('reportNotice').hidden) { document.getElementById('reportLaterBtn').click(); return; }
         if (activeScreenId() === 'screen-add') { switchToScreen('screen-settings'); return; }
         if (activeScreenId() === 'screen-settings') { switchToScreen('screen-live'); return; }
         // TV Guide with the remote in the menu: back to Live TV.
