@@ -135,6 +135,20 @@ test('navigation: Up and Down return to the same button after a shorter row', as
     expect(await focusedText()).toBe(before);
 });
 
+// The picture behind the menu and Settings is dimmed; the channel list keeps it bright.
+test('dim: the picture is dimmed under the menu and Settings, not in the channel list', async ({ page }) => {
+    await open(page);
+    const dimmed = () => page.evaluate(() => document.documentElement.classList.contains('menu-dim'));
+    expect(await dimmed()).toBe(false);          // the channel list is up
+    await press(page, KEY.LEFT);                 // into the menu
+    expect(await dimmed()).toBe(true);
+    await press(page, KEY.RIGHT);                // back to the channel list
+    expect(await dimmed()).toBe(false);
+    await page.click('#navSettings');
+    expect(await dimmed()).toBe(true);
+    await page.screenshot({ path: test.info().outputPath('settings-dim.png') });
+});
+
 test('report a problem: the drawn QR code opens a filled-in GitHub issue, with logins cut out', async ({ page }) => {
     await page.addInitScript(() => {
         localStorage.setItem('iptv_log', JSON.stringify([

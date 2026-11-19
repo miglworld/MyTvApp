@@ -350,6 +350,26 @@ html.avplay-active .favorite-btn {
 	position: relative;
 }
 
+/* Over the picture, under the screens and the sidebar. Fades in while the
+   menu or Settings is open, so the text and buttons read against a dark
+   background instead of moving video. */
+.video-dim {
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	z-index: 1;
+	background: rgba(0, 0, 0, 0.62);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.2s ease-out;
+}
+
+html.menu-dim .video-dim {
+	opacity: 1;
+}
+
 .screen {
 	position: absolute;
 	top: 0;
