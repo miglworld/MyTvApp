@@ -2,8 +2,13 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
-## v0.13.0 (2026-11-19)
-Released version: everything from v0.12.8 to v0.12.16 below, now on `main`.
+## v0.13.1 (2026-11-19)
+Released version: v0.13.0 below plus these two changes, now on `main`.
+- Faster playlist reading: tidying channel names had made reading a 13,000-channel playlist about twice as slow. It is now close to the speed of v0.12.7 again, with the same names as before.
+- Diagnostics: passwords are hidden by where they sit in an address (a `password=` value, the password in an Xtream stream address, a login in an address) instead of by looking up the saved passwords.
+
+## v0.13.0 (2026-11-19, not released on its own)
+Everything from v0.12.8 to v0.12.16 below.
 - **Xtream Codes accounts** in Settings, Playlists: add one by server, username and password; its live channels and categories load like an M3U playlist. The password stays out of the diagnostics and Report a problem.
 - Tidier channel names: quality tags, two-letter country prefixes and emoji are left out; "[Geo-blocked]" and "[Not 24/7]" show as small tags in full screen instead. Channels with the same tidy name show their quality in brackets.
 - A channel that will not play tries the next copy of the same channel.
