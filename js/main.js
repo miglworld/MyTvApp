@@ -342,6 +342,7 @@
             this.row = row || 0;
             this.col = col || 0;
             this.wantCol = this.col;
+            syncMenuDim();
             this.apply();
         },
 
@@ -479,6 +480,15 @@
         var screens = document.querySelectorAll('.screen');
         for (var i = 0; i < screens.length; i++) screens[i].classList.remove('active');
         document.getElementById(id).classList.add('active');
+        syncMenuDim();
+    }
+
+    // Dims the picture behind the menu and behind Settings and Add Playlist,
+    // so their text reads clearly. The channel list keeps the picture bright.
+    function syncMenuDim() {
+        var screen = activeScreenId();
+        var on = Focus.currentZone === 'sideMenu' || screen === 'screen-settings' || screen === 'screen-add';
+        document.documentElement.classList.toggle('menu-dim', on);
     }
 
     function activeScreenId() {
