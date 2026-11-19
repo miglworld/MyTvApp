@@ -150,9 +150,20 @@ window.onerror = function (msg, file, line) {
 			<section id="screen-add" class="screen">
 				<div class="add-playlist-panel">
 					<h2 id="addPlaylistTitle">Add M3U Playlist</h2>
-					<p class="hint">Enter the URL of your M3U / M3U8 playlist</p>
+					<p class="hint" id="addPlaylistHint">Enter the URL of your M3U / M3U8 playlist</p>
 					<input type="url" id="urlInput" class="url-input" value="https://"
 						aria-label="Playlist address (M3U or M3U8 URL)" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+					<div id="xtreamFields" hidden>
+						<label class="field-label" for="xtreamServerInput">Server</label>
+						<input type="url" id="xtreamServerInput" class="url-input" placeholder="http://server:port"
+							aria-label="Xtream server address" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+						<label class="field-label" for="xtreamUserInput">Username</label>
+						<input type="text" id="xtreamUserInput" class="url-input"
+							aria-label="Xtream username" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+						<label class="field-label" for="xtreamPasswordInput">Password</label>
+						<input type="password" id="xtreamPasswordInput" class="url-input"
+							aria-label="Xtream password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+					</div>
 					<p class="input-tip">Press OK on the field to type. You can also type from
 						your phone with the SmartThings app keyboard while the TV keyboard is open.</p>
 					<div class="add-actions">

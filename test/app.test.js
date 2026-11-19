@@ -96,6 +96,38 @@ test('markup in names stays plain text for the page to show as text', function (
     assert.strictEqual(ch[0].group, '<img src=x onerror=alert(1)>');
 });
 
+test('quality tags, a country prefix and emoji are left out of the shown name', function () {
+    assert.strictEqual(app.cleanName('UK | BBC One FHD'), 'BBC One');
+    assert.strictEqual(app.cleanName('Sky News ᴴᴰ'), 'Sky News');
+    assert.strictEqual(app.cleanName('Sky Sport 4K (UHD)'), 'Sky Sport');
+    assert.strictEqual(app.cleanName('ESPN ⚽ HD'), 'ESPN');
+    assert.strictEqual(app.cleanName('CNN [SD] News'), 'CNN News');
+    assert.strictEqual(app.cleanName('FR | TF1 720p'), 'TF1');
+    assert.strictEqual(app.cleanName('Rai 1 (576p)'), 'Rai 1');
+    assert.strictEqual(app.cleanName('Canal 5 [504p]'), 'Canal 5');
+});
+
+test('words that only look like tags are kept, and a three-letter prefix stays', function () {
+    assert.strictEqual(app.cleanName('HDTV Guide'), 'HDTV Guide');
+    assert.strictEqual(app.cleanName('SDK Channel'), 'SDK Channel');
+    assert.strictEqual(app.cleanName('USA | Sky News FHD'), 'USA | Sky News');
+    assert.strictEqual(app.cleanName('BBC | News'), 'BBC | News');
+    assert.strictEqual(app.cleanName('<script>alert(1)</script>'), '<script>alert(1)</script>');
+});
+
+test('a name that would be empty keeps the name the playlist gave', function () {
+    assert.strictEqual(app.cleanName('FHD'), 'FHD');
+    assert.strictEqual(app.cleanName('⚽'), '⚽');
+    assert.strictEqual(app.cleanName(''), '');
+});
+
+test('a channel keeps the name as given for the Geo-blocked check', function () {
+    var ch = app.parseM3U('#EXTINF:-1,UK | Film Four HD [Geo-blocked]\nhttp://e/a');
+    assert.strictEqual(ch[0].name, 'Film Four [Geo-blocked]');
+    assert.strictEqual(ch[0].rawName, 'UK | Film Four HD [Geo-blocked]');
+    assert.strictEqual(app.isTagged(ch[0]), true);
+});
+
 test('the identity a playlist gives for a channel', function () {
     var ch = app.parseM3U([
         '#EXTINF:-1 tvg-id="a",From an option line',
@@ -172,3 +204,122 @@ test('version comparison is by number, not by text', function () {
     assert.strictEqual(app.versionNewer('', '0.9.0'), false);
 });
 
+
+// ----- Xtream Codes accounts --------------------------------------------------
+
+test('an Xtream server address is cleaned up to scheme, host, port and path', function () {
+    assert.strictEqual(app.normalizeXtreamServer('iptv.example:8080'), 'http://iptv.example:8080');
+    assert.strictEqual(app.normalizeXtreamServer('  https://iptv.example:8443/ '), 'https://iptv.example:8443');
+    assert.strictEqual(app.normalizeXtreamServer('http://iptv.example/get.php?username=a&password=b'), 'http://iptv.example');
+    assert.strictEqual(app.normalizeXtreamServer('http://iptv.example/panel/player_api.php'), 'http://iptv.example/panel');
+    assert.strictEqual(app.normalizeXtreamServer('http://localhost:8080'), 'http://localhost:8080');
+    assert.strictEqual(app.normalizeXtreamServer(''), '');
+    assert.strictEqual(app.normalizeXtreamServer('ftp://iptv.example'), '');
+    assert.strictEqual(app.normalizeXtreamServer('http://user:pw@iptv.example'), '');
+});
+
+test('an Xtream account is read from player_api.php, with the login encoded', function () {
+    assert.strictEqual(app.xtreamApiUrl('http://iptv.example:8080', 'me', 'p&ss=1 /x', 'get_live_streams'),
+        'http://iptv.example:8080/player_api.php?username=me&password=p%26ss%3D1%20%2Fx&action=get_live_streams');
+    var pl = { type: 'xtream', server: 'http://iptv.example', username: 'u', password: 'p' };
+    assert.strictEqual(app.playlistAddress(pl), 'http://iptv.example/player_api.php?username=u&password=p&action=get_live_streams');
+    // An M3U playlist (no type, as stored by earlier versions) keeps its own address.
+    assert.strictEqual(app.playlistAddress({ url: 'https://host.example/list.m3u' }), 'https://host.example/list.m3u');
+});
+
+test('the live channels of player_api.php become channels with their categories', function () {
+    var categories = [{ category_id: '1', category_name: 'UK | News' }, { category_id: 2, category_name: 'Sport' }];
+    var streams = [
+        { num: 1, name: 'News One', stream_id: 101, stream_icon: 'http://img.example/1.png', epg_channel_id: 'news1.uk', category_id: '1' },
+        { num: 2, name: 'Sport Two', stream_id: '102', stream_icon: '', epg_channel_id: null, category_id: '2' },
+        { num: 3, name: 'Lost', stream_id: 103, category_id: '99' },
+        { num: 4, name: 'No id' },
+        null
+    ];
+    var ch = app.parseM3U(app.xtreamM3u('http://iptv.example:8080', 'me', 'p w', categories, streams));
+    assert.deepStrictEqual(ch.map(function (c) { return [c.name, c.group, c.url]; }), [
+        ['News One', 'UK | News', 'http://iptv.example:8080/live/me/p%20w/101.ts'],
+        ['Sport Two', 'Sport', 'http://iptv.example:8080/live/me/p%20w/102.ts'],
+        ['Lost', 'Other', 'http://iptv.example:8080/live/me/p%20w/103.ts']
+    ]);
+    assert.strictEqual(ch[0].tvgId, 'news1.uk');
+    assert.strictEqual(ch[0].logo, 'http://img.example/1.png');
+    assert.strictEqual(ch[1].chno, '2');
+});
+
+test('values from an Xtream server cannot break out of their M3U line', function () {
+    var streams = [{ num: '1"x', name: 'Bad\n#EXTINF:-1,Injected\nhttp://evil.example/x', stream_id: '7/../../x', stream_icon: '" group-title="Hijack', category_id: '1' }];
+    var ch = app.parseM3U(app.xtreamM3u('http://iptv.example', 'u', 'p', [{ category_id: '1', category_name: 'A"B\nC' }], streams));
+    assert.strictEqual(ch.length, 1);
+    assert.strictEqual(ch[0].url, 'http://iptv.example/live/u/p/7x.ts');
+    assert.strictEqual(ch[0].group, 'A B C');
+    assert.ok(ch[0].name.indexOf('Injected') !== -1 && ch[0].name.indexOf('\n') === -1);
+    assert.strictEqual(ch[0].chno, '');
+    // Not a list (what a server answers to a wrong login): no categories, nothing breaks.
+    assert.strictEqual(app.parseM3U(app.xtreamM3u('http://iptv.example', 'u', 'p', { user_info: {} }, [])).length, 0);
+});
+
+test('passwords are masked in diagnostics: as typed, encoded, and as a password= value', function () {
+    var out = app.maskSecrets('failed http://h/live/me/s3cr&t/1.ts and http://h/get.php?username=me&password=s3cr%26t&type=m3u_plus, other password=zzz', ['s3cr&t']);
+    assert.ok(out.indexOf('s3cr') === -1, out);
+    assert.ok(out.indexOf('zzz') === -1, out);
+    assert.match(out, /\/live\/me\/•••\/1\.ts/);
+    assert.strictEqual(app.maskSecrets('nothing secret', ['']), 'nothing secret');
+    assert.strictEqual(app.maskSecrets('no list', undefined), 'no list');
+});
+
+test('a failed channel is replaced by the next copy of the same channel, in list order', function () {
+    var a = { url: 'http://e/fhd', name: 'BBC One', tvgId: 'bbc1.uk' };
+    var b = { url: 'http://e/hd', name: 'BBC One', tvgId: 'bbc1.uk' };
+    var c = { url: 'http://e/sd', name: 'BBC One', tvgId: 'bbc1.uk' };
+    var none = function () { return false; };
+    assert.strictEqual(app.nextCopyFrom([a, b, c], a, [a.url], none), b);
+    assert.strictEqual(app.nextCopyFrom([a, b, c], b, [a.url, b.url], none), c);
+    assert.strictEqual(app.nextCopyFrom([a, b, c], c, [a.url, b.url, c.url], none), null);
+});
+
+test('copies that failed recently are tried last, and another channel is never a copy', function () {
+    var a = { url: 'http://e/fhd', name: 'BBC One', tvgId: '' };
+    var b = { url: 'http://e/hd', name: 'BBC One', tvgId: '' };
+    var c = { url: 'http://e/sd', name: 'BBC One', tvgId: '' };
+    var failed = { 'http://e/hd': true };
+    var isFailed = function (x) { return !!failed[x.url]; };
+    assert.strictEqual(app.nextCopyFrom([a, b, c], a, [a.url], isFailed), c);
+    var id = { url: 'http://e/id', name: 'BBC One', tvgId: 'bbc1.uk' };
+    var other = { url: 'http://e/other', name: 'BBC One', tvgId: 'news.uk' };
+    assert.strictEqual(app.nextCopyFrom([id, other], id, [id.url], function () { return false; }), null);
+    assert.strictEqual(app.nextCopyFrom(undefined, a, [a.url], function () { return false; }), null);
+});
+
+test('the quality shown in the switch message comes from the name the playlist gave', function () {
+    assert.strictEqual(app.qualityLabel({ rawName: 'UK | BBC One HD' }), 'HD');
+    assert.strictEqual(app.qualityLabel({ rawName: 'Rai 1 (576p)' }), '576p');
+    assert.strictEqual(app.qualityLabel({ rawName: 'Plain' }), '');
+});
+
+test('names that clash after cleaning get their quality in brackets', function () {
+    var ch = app.parseM3U([
+        '#EXTINF:-1,UK | BBC One FHD', 'http://e/1',
+        '#EXTINF:-1,UK | BBC One SD', 'http://e/2',
+        '#EXTINF:-1,Sky News HD', 'http://e/3'
+    ].join('\n'));
+    app.labelClashes(ch);
+    assert.deepStrictEqual(ch.map(function (c) { return c.name; }), ['BBC One (FHD)', 'BBC One (SD)', 'Sky News']);
+    // The base name is kept for grouping: the copies still match each other.
+    assert.deepStrictEqual(ch.map(function (c) { return c.baseName; }), ['BBC One', 'BBC One', 'Sky News']);
+});
+
+test('a clash with no quality to add, and a name that is not a clash, stay as they are', function () {
+    var ch = app.parseM3U([
+        '#EXTINF:-1,Plain Name', 'http://e/1',
+        '#EXTINF:-1,Plain Name', 'http://e/2',
+        '#EXTINF:-1,Solo HD', 'http://e/3'
+    ].join('\n'));
+    app.labelClashes(ch);
+    assert.deepStrictEqual(ch.map(function (c) { return c.name; }), ['Plain Name', 'Plain Name', 'Solo']);
+});
+
+test('the quality is kept in the case a playlist gives it, resolutions in lower case', function () {
+    assert.strictEqual(app.qualityLabel({ rawName: 'Sky Sport hd' }), 'HD');
+    assert.strictEqual(app.qualityLabel({ rawName: 'Rai 1 576P' }), '576p');
+});
