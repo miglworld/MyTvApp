@@ -107,6 +107,27 @@ test('quality tags, a country prefix and emoji are left out of the shown name', 
     assert.strictEqual(app.cleanName('Canal 5 [504p]'), 'Canal 5');
 });
 
+test('a country name is left out of the shown name and kept as a tag', function () {
+    assert.strictEqual(app.cleanName('Portugal | RTP1'), 'RTP1');
+    assert.strictEqual(app.cleanName('Portugal: RTP1 HD'), 'RTP1');
+    assert.strictEqual(app.cleanName('BBC One (United Kingdom)'), 'BBC One');
+    assert.strictEqual(app.cleanName('BBC One (United Kingdom) FHD'), 'BBC One');
+    assert.strictEqual(app.cleanName('Sky News [Italy]'), 'Sky News');
+    assert.strictEqual(app.cleanName('Scotland: BBC Alba HD'), 'BBC Alba');
+    assert.strictEqual(app.countryIn('Portugal | RTP1'), 'Portugal');
+    assert.strictEqual(app.countryIn('BBC One (United Kingdom)'), 'United Kingdom');
+    assert.strictEqual(app.countryIn('Nigeria | Channel'), 'Nigeria');
+    assert.deepStrictEqual(app.channelTags({ rawName: 'Portugal | RTP1 [Geo-blocked]' }), ['Geo-blocked', 'Portugal']);
+});
+
+test('a country name that is part of the channel name is kept', function () {
+    assert.strictEqual(app.cleanName('Portugal Sport 1'), 'Portugal Sport 1');
+    assert.strictEqual(app.cleanName('Georgia'), 'Georgia');
+    assert.strictEqual(app.cleanName('Sky News Germany'), 'Sky News Germany');
+    assert.strictEqual(app.countryIn('Sky News Germany'), '');
+    assert.strictEqual(app.countryIn('Portugal Sport 1'), '');
+});
+
 test('words that only look like tags are kept, and a three-letter prefix stays', function () {
     assert.strictEqual(app.cleanName('HDTV Guide'), 'HDTV Guide');
     assert.strictEqual(app.cleanName('SDK Channel'), 'SDK Channel');
