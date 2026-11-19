@@ -262,6 +262,31 @@ test('full screen: OK on a channel opens it, Back returns to the list', async ({
     expect(await activeScreen(page)).toBe('screen-live');
 });
 
+// The Samsung player's object sits above the <video>. Whichever player plays,
+// the other one's surface must not cover the picture.
+test('full screen: the picture is not covered, whether the Samsung player plays or another player takes over', async ({ page }) => {
+    const visibility = () => page.evaluate(() => ({
+        samsung: getComputedStyle(document.getElementById('avPlayer')).visibility,
+        video: getComputedStyle(document.getElementById('videoPlayer')).visibility,
+    }));
+    await open(page);
+    await press(page, KEY.OK);
+    await expect(page.locator('#screen-player')).toHaveClass(/active/);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('iptv_log')).join('\n'))).toContain('(Samsung player)');
+    expect(await visibility()).toEqual({ samsung: 'visible', video: 'hidden' });
+    await press(page, KEY.BACK);
+
+    // The Samsung player refuses the next channel: the TV player and hls.js are tried.
+    await page.evaluate(() => {
+        window.webapis.avplay.prepareAsync = (ok, fail) => setTimeout(() => fail({ name: 'PLAYER_ERROR_CONNECTION_FAILED' }), 30);
+    });
+    await press(page, KEY.DOWN);
+    await press(page, KEY.OK);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('iptv_log')).join('\n'))).toContain('Samsung player: PLAYER_ERROR_CONNECTION_FAILED');
+    await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains('avplay-active'))).toBe(false);
+    expect(await visibility()).toEqual({ samsung: 'hidden', video: 'visible' });
+});
+
 test('markup in playlist names is shown as text and runs nothing', async ({ page }) => {
     const hostile = '<img src=x onerror="window.__pwned=1">';
     await open(page, { routes: {
