@@ -1,5 +1,7 @@
 # MyTvApp
 
+[![Latest release](https://img.shields.io/github/v/release/miglworld/MyTvApp?label=release)](https://github.com/miglworld/MyTvApp/releases/latest) ![Platform: Samsung Tizen](https://img.shields.io/badge/platform-Samsung%20Tizen-1428A0)
+
 A live TV player for Samsung Smart TVs. It plays the channels of your M3U playlists, shows what is on now and next, and is driven entirely with the TV remote.
 
 ![Live TV: the channel plays behind a floating channel list and its caption](docs/images/live.jpg)
@@ -20,6 +22,8 @@ A live TV player for Samsung Smart TVs. It plays the channels of your M3U playli
 - [Credits and license](#credits-and-license)
 
 ## What it does
+
+No accounts, no sign-up, no analytics. The app contacts only your playlist servers, GitHub (for updates and the programme guide) and iptv-org (for the two preset playlists).
 
 | | |
 |---|---|
@@ -228,7 +232,7 @@ They verify that the scripts parse, that the version is the same in all four pla
 
 ### Releasing a change
 
-1. Bump the version in **four places**, to the same value: `package.json`, `config.xml`, `APP_VERSION` in `js/main.js`, and `BUNDLED_VERSION` in `js/boot.js`.
+1. Bump the version in **five places**, to the same value: `package.json`, `package-lock.json` (two lines at the top), `config.xml`, `APP_VERSION` in `js/main.js`, and `BUNDLED_VERSION` in `js/boot.js`.
 2. Add a line to [CHANGELOG.md](CHANGELOG.md).
 3. Optional: try it on the TV first. Push the work to the `dev` branch (`git push origin HEAD:dev --force-with-lease`), and on a TV with Developer mode on choose "Check for updates now".
 4. Open a pull request, wait for the check, and merge into `main`. Installed TVs update themselves on the next start. Afterwards bring `dev` level with `main` again.
