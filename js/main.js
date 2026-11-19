@@ -30,8 +30,11 @@
     if (typeof document === 'undefined') {
         if (typeof module !== 'undefined') module.exports = {
             parseM3U: parseM3U, versionNewer: versionNewer, isStreamUrl: isStreamUrl, cleanUserAgent: cleanUserAgent,
-            listWindow: listWindow, guideIndexAt: guideIndexAt, isTagged: isTagged, ago: ago,
-            qrMatrix: qrMatrix, reportLink: reportLink, redactAddresses: redactAddresses
+            listWindow: listWindow, guideIndexAt: guideIndexAt, isTagged: isTagged, channelTags: channelTags, ago: ago, cleanName: cleanName,
+            nextCopyFrom: nextCopyFrom, qualityLabel: qualityLabel, labelClashes: labelClashes,
+            qrMatrix: qrMatrix, reportLink: reportLink, redactAddresses: redactAddresses,
+            normalizeXtreamServer: normalizeXtreamServer, xtreamApiUrl: xtreamApiUrl, xtreamM3u: xtreamM3u,
+            playlistAddress: playlistAddress, redactLogins: redactLogins
         };
         return;
     }
@@ -39,7 +42,7 @@
     // ==========================================================================
     // Config / constants
     // ==========================================================================
-    var APP_VERSION = '0.12.7';
+    var APP_VERSION = '0.13.1';
     var PLAYLISTS_KEY = 'iptv_playlists';
     var ACTIVE_PLAYLISTS_KEY = 'iptv_active_playlist_id';
     var FAVORITES_KEY = 'iptv_favorites';
@@ -229,7 +232,65 @@
     if (taggedMode !== 'hide' && taggedMode !== 'show') taggedMode = 'dim';
 
     function isTagged(ch) {
-        return /\[(geo-blocked|not 24\/7)\]/i.test(ch.name || '');
+        return /\[(geo-blocked|not 24\/7)\]/i.test(ch.rawName || ch.name || '');
+    }
+
+    // The playlist's marks as tags, read from the name it gave. They are
+    // taken out of the name on screen and shown small in full screen.
+    function channelTags(ch) {
+        var raw = ch.rawName || ch.name || '';
+        var tags = [];
+        if (/\[\s*geo-blocked\s*\]/i.test(raw)) tags.push('Geo-blocked');
+        if (/\[\s*not 24\/7\s*\]/i.test(raw)) tags.push('Not 24/7');
+        return tags;
+    }
+
+    // A name without "[Geo-blocked]" and "[Not 24/7]".
+    function withoutMarks(name) {
+        return String(name || '').replace(/\[\s*(geo-blocked|not 24\/7)\s*\]/gi, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    // The next copy of a channel to try after a failure: from the copies that
+    // are not the current one and not yet tried, in playlist order. Copies that
+    // failed recently go last. A copy with a different tvg-id is another channel.
+    function nextCopyFrom(group, current, tried, hasFailed) {
+        var fresh = [];
+        var failed = [];
+        (group || []).forEach(function (c) {
+            if (c.url === current.url || tried.indexOf(c.url) !== -1) return;
+            if (c.tvgId && current.tvgId && c.tvgId !== current.tvgId) return;
+            (hasFailed(c) ? failed : fresh).push(c);
+        });
+        return fresh[0] || failed[0] || null;
+    }
+
+    // Quality shown in a toast, read from the name the playlist gave.
+    function qualityLabel(ch) {
+        return qualityIn(ch.rawName || ch.name || '');
+    }
+
+    function qualityIn(name) {
+        var m = /\b(FHD|UHD|HD|SD|4K|\d{3,4}p)\b/i.exec(name);
+        if (!m) return '';
+        var q = m[1];
+        var c = q.charCodeAt(0);
+        return c >= 48 && c <= 57 ? q.toLowerCase() : q.toUpperCase();
+    }
+
+    // Channels whose cleaned names are the same get their quality in brackets,
+    // so "BBC One FHD" and "BBC One SD" read "BBC One (FHD)" and "BBC One (SD)".
+    // A clash with no quality to add stays as it is. Sets each channel's name.
+    function labelClashes(list) {
+        var count = Object.create(null);
+        list.forEach(function (ch) {
+            var k = String(ch.baseName || ch.name || '').toLowerCase();
+            count[k] = (count[k] || 0) + 1;
+        });
+        list.forEach(function (ch) {
+            var base = ch.baseName || ch.name || '';
+            ch.name = count[base.toLowerCase()] > 1 && ch.quality ? base + ' (' + ch.quality + ')' : base;
+        });
+        return list;
     }
 
     // Channels that did not play the last time they were tried on this TV,
@@ -284,6 +345,7 @@
         return logLines;
     }
     function logEvent(msg) {
+        msg = redactLogins(msg);
         var d = new Date();
         var two = function (n) { return (n < 10 ? '0' : '') + n; };
         var lines = readLog();
@@ -295,6 +357,7 @@
     if (window.MYTVAPP_ERROR && !window.MYTVAPP_ERROR.logged) {
         var showError = window.MYTVAPP_ERROR;
         window.MYTVAPP_ERROR = function (text) {
+            text = redactLogins(text);
             logEvent('ERROR ' + text);
             // Kept on its own as well: the list above is short and moves on.
             writeStored(LAST_ERROR_KEY, new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC \u00b7 ' + APP_VERSION + ' \u00b7 ' + String(text).slice(0, 200));
@@ -327,6 +390,11 @@
         row: 0,
         col: 0,
 
+        // The column the remote last chose with Left or Right. Up and Down
+        // return to it, so a short row in between does not move the focus
+        // to the wrong button.
+        wantCol: 0,
+
         setZone: function (name, row, col) {
             // The menu folds into a small capsule while the remote is elsewhere
             // (a dialog leaves it as it was).
@@ -336,6 +404,8 @@
             this.currentZone = name;
             this.row = row || 0;
             this.col = col || 0;
+            this.wantCol = this.col;
+            syncMenuDim();
             this.apply();
         },
 
@@ -363,6 +433,7 @@
             }
             var zone = this.zones[this.currentZone];
             if (zone && zone.afterApply) zone.afterApply(this.row, matrix.length);
+            syncDomFocus();
         },
 
         move: function (dir) {
@@ -373,17 +444,22 @@
             var rowArr = matrix[this.row] || [];
 
             if (dir === 'left') {
-                if (this.col > 0) { this.col--; this.apply(); }
+                if (this.col > 0) { this.col--; this.wantCol = this.col; this.apply(); }
                 else if (zone.onEdge) zone.onEdge('left');
             } else if (dir === 'right') {
-                if (this.col < rowArr.length - 1) { this.col++; this.apply(); }
+                if (this.col < rowArr.length - 1) { this.col++; this.wantCol = this.col; this.apply(); }
                 else if (zone.onEdge) zone.onEdge('right');
-            } else if (dir === 'up') {
-                if (this.row > 0) { this.row--; this.apply(); }
-                else if (zone.onEdge) zone.onEdge('up');
-            } else if (dir === 'down') {
-                if (this.row < matrix.length - 1) { this.row++; this.apply(); }
-                else if (zone.onEdge) zone.onEdge('down');
+            } else if (dir === 'up' || dir === 'down') {
+                var next = this.row + (dir === 'up' ? -1 : 1);
+                if (next < 0 || next >= matrix.length) {
+                    if (zone.onEdge) zone.onEdge(dir);
+                    return;
+                }
+                // Same column as before, or the last button of a shorter row.
+                this.row = next;
+                var nextRow = matrix[next] || [];
+                this.col = Math.max(0, Math.min(this.wantCol, nextRow.length - 1));
+                this.apply();
             }
         },
 
@@ -394,6 +470,21 @@
             if (el) el.click();
         }
     };
+
+    // The remote's highlight is the .focused class. This also moves the
+    // browser's own focus onto that element, so assistive technology (Samsung
+    // Voice Guide) reads what the remote is on. Text fields are left alone:
+    // focusing one opens the system keyboard, which only OK may do.
+    function syncDomFocus() {
+        var marked = document.querySelectorAll('.focused');
+        var el = null;
+        for (var i = marked.length - 1; i >= 0; i--) {
+            if (marked[i].tagName !== 'INPUT' && marked[i].getClientRects().length) { el = marked[i]; break; }
+        }
+        if (!el || document.activeElement === el) return;
+        if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+        try { el.focus({ preventScroll: true }); } catch (e) { /* not focusable here: the highlight still shows it */ }
+    }
 
     // Left from a screen's own controls goes to the side menu, onto the entry
     // of what is showing.
@@ -468,6 +559,15 @@
         var screens = document.querySelectorAll('.screen');
         for (var i = 0; i < screens.length; i++) screens[i].classList.remove('active');
         document.getElementById(id).classList.add('active');
+        syncMenuDim();
+    }
+
+    // Dims the picture behind the menu and behind Settings and Add Playlist,
+    // so their text reads clearly. The channel list keeps the picture bright.
+    function syncMenuDim() {
+        var screen = activeScreenId();
+        var on = Focus.currentZone === 'sideMenu' || screen === 'screen-settings' || screen === 'screen-add';
+        document.documentElement.classList.toggle('menu-dim', on);
     }
 
     function activeScreenId() {
@@ -910,6 +1010,7 @@
             cell.className = 'guide-ch';
             var logo = document.createElement('span');
             logo.className = 'live-logo';
+            logo.setAttribute('aria-hidden', 'true');
             if (ch.logo) logo.style.backgroundImage = 'url(' + JSON.stringify(ch.logo) + ')';
             else logo.textContent = (ch.name || '?').charAt(0).toUpperCase();
             var name = document.createElement('span');
@@ -934,6 +1035,9 @@
                 var prog = document.createElement('div');
                 prog.className = 'guide-cell' + (from <= now && now < to ? ' on' : '') +
                     (hasFocus && focused && r === state.guideRow && i === focused.index ? ' focused' : '');
+                prog.setAttribute('role', 'button');
+                prog.setAttribute('aria-label', [ch.name, list[i][2], guideTime(from) + ' to ' + guideTime(to),
+                    from <= now && now < to ? 'on now' : ''].filter(Boolean).join(', '));
                 prog.style.left = left + 'px';
                 prog.style.width = Math.max(6, width) + 'px';
                 // Too narrow for words: a plain block.
@@ -952,6 +1056,7 @@
             frag.appendChild(row);
         }
         rowsBox.appendChild(frag);
+        syncDomFocus();
 
         // The present, as a line through all rows.
         if (now >= start && now < end) {
@@ -1056,6 +1161,7 @@
         num.textContent = ch.number ? String(ch.number) : '';
         var logo = document.createElement('span');
         logo.className = 'live-logo';
+        logo.setAttribute('aria-hidden', 'true');   // the name says the same
         if (ch.logo) logo.style.backgroundImage = 'url(' + JSON.stringify(ch.logo) + ')';
         else logo.textContent = (ch.name || '?').charAt(0).toUpperCase();
         var text = document.createElement('span');
@@ -1083,8 +1189,17 @@
             var star = document.createElement('span');
             star.className = 'live-mark';
             star.textContent = '\u2605';
+            star.setAttribute('aria-hidden', 'true');
             row.appendChild(star);
         }
+        // Read as one button: number, name, programme, and the states.
+        var spoken = [ch.number ? String(ch.number) : '', ch.name || ''];
+        if (failed) spoken.push('did not play last time');
+        else if (on && on.now) spoken.push(String(on.now[2]));
+        if (isFavorited(ch)) spoken.push('favorite');
+        row.setAttribute('role', 'button');
+        row.setAttribute('aria-label', spoken.filter(Boolean).join(', '));
+        if (state.nowPlaying && ch.url === state.nowPlaying.url) row.setAttribute('aria-current', 'true');
         return row;
     }
 
@@ -1126,6 +1241,7 @@
             frag.appendChild(buildChannelRow(list[i], i === state.liveIndex ? (hasFocus ? ' selected focused' : ' selected') : ''));
         }
         box.appendChild(frag);
+        if (hasFocus) syncDomFocus();
         updateLiveInfo();
     }
 
@@ -1258,6 +1374,44 @@
         return ua.length > 300 ? '' : ua;
     }
 
+    // A channel name as shown on screen: quality tags (FHD, HD, 4K...), a
+    // two-letter country prefix ("UK |"), and emoji are taken out, and the
+    // spacing tidied. Three-letter prefixes such as "USA |" are kept. If
+    // nothing is left, the name as the playlist gave it is used.
+    // Runs for every channel of every playlist, so the common cases are done
+    // with plain string operations and each pattern runs only when the name
+    // has what it looks for (budget: 13,000 names within the start-up time).
+    // "Channel 1 (1080p)" -> "Channel 1": a quality tag in brackets at the end,
+    // after a space (as the full set of steps below would remove it).
+    function withoutTrailingTag(s) {
+        var close = s.charAt(s.length - 1);
+        if (close !== ')' && close !== ']') return s;
+        var open = s.lastIndexOf(close === ')' ? '(' : '[');
+        if (open < 1 || s.charAt(open - 1) !== ' ' || !/^(FHD|UHD|HD|SD|4K|\d{3,4}p)$/i.test(s.slice(open + 1, -1).trim())) return s;
+        s = s.slice(0, open);
+        while (s.charAt(s.length - 1) === ' ') s = s.slice(0, -1);
+        return s;
+    }
+
+    function cleanName(raw) {
+        var s = String(raw || '');
+        // Single spaces and no spaces at the ends, as every later step expects.
+        if (s.indexOf('[') !== -1) s = withoutMarks(s);
+        else s = (/\s\s|[^\S ]/.test(s) ? s.replace(/\s+/g, ' ') : s).trim();
+        s = withoutTrailingTag(s);
+        // Anything left to tidy? One test instead of every step for plain names.
+        if (!/[|\u0080-￿]|\s\s|^[\s\-:·]|[\s\-:·]$|[([]\s*[)\]]|(^|[\s([])(FHD|UHD|HD|SD|4K|\d{3,4}p)(?=$|[\s)\]])/i.test(s)) {
+            return s || String(raw || '').trim();
+        }
+        s = s.replace(/^[A-Za-z]{2}\s*\|\s*/, '');
+        s = s.replace(/[\uD83C-\uDBFF][\uDC00-\uDFFF]|[☀-➿]|️|‍/g, ' ');
+        s = s.replace(/ᴴᴰ|ᶠᴴᴰ/g, ' ');
+        s = s.replace(/(^|[\s([])(FHD|UHD|HD|SD|4K|\d{3,4}p)(?=$|[\s)\]])/gi, '$1');
+        s = s.replace(/\(\s*\)|\[\s*\]/g, ' ');
+        s = s.replace(/\s+/g, ' ').replace(/^[\s|\-:·]+|[\s|\-:·]+$/g, '');
+        return s || String(raw || '').trim();
+    }
+
     function parseM3U(text) {
         var lines = text.split(/\r?\n/);
         var channels = [];
@@ -1275,17 +1429,28 @@
                 while ((m = attrRegex.exec(line)) !== null) attrs[m[1].toLowerCase()] = m[2];
                 // The name follows the first comma that is outside quotes
                 // (attribute values such as group-title="News, Sport" have commas too).
+                // Jumps from quote to quote instead of reading every character.
                 var comma = -1;
-                var inQuote = false;
-                for (var c = 0; c < line.length; c++) {
-                    var chr = line.charAt(c);
-                    if (chr === '"') inQuote = !inQuote;
-                    else if (chr === ',' && !inQuote) { comma = c; break; }
+                var from = 0;
+                for (;;) {
+                    var nextComma = line.indexOf(',', from);
+                    var nextQuote = line.indexOf('"', from);
+                    if (nextComma === -1) break;
+                    if (nextQuote === -1 || nextComma < nextQuote) { comma = nextComma; break; }
+                    var closeQuote = line.indexOf('"', nextQuote + 1);
+                    if (closeQuote === -1) break;   // an unclosed quote: no comma outside quotes
+                    from = closeQuote + 1;
                 }
                 if (comma === -1) comma = line.lastIndexOf(',');
                 var name = comma === -1 ? '' : line.slice(comma + 1).trim();
+                var clean = cleanName(name) || 'Unnamed Channel';
                 pending = {
-                    name: name || 'Unnamed Channel',
+                    name: clean,
+                    // The cleaned name without any quality added by labelClashes().
+                    baseName: clean,
+                    quality: qualityIn(name),
+                    // The name as the playlist gave it: "[Geo-blocked]" is read from this.
+                    rawName: name || 'Unnamed Channel',
                     logo: safeLogo(attrs['tvg-logo']),
                     group: attrs['group-title'] || 'Other',
                     tvgId: attrs['tvg-id'] || '',
@@ -1386,6 +1551,89 @@
         }
     }
 
+    // ----- Xtream Codes accounts -----------------------------------------------
+    // An account is stored as { type: 'xtream', server, username, password }.
+    // The app asks the server's player_api.php for the live categories and
+    // live channels only (its get.php playlist also lists every film and
+    // series, often tens of megabytes), writes them as M3U text, and from
+    // there it is parsed, stored and refreshed like any other playlist.
+    // Playlists without a type are M3U addresses ({ url }).
+
+    // "iptv.example:8080", "http://iptv.example:8080/" or a pasted
+    // ".../get.php?..." all become "http://iptv.example:8080". '' when it is
+    // not a web address.
+    function normalizeXtreamServer(text) {
+        var s = String(text || '').trim();
+        if (!s) return '';
+        if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = 'http://' + s;
+        s = s.replace(/[?#].*$/, '').replace(/\/(get|player_api)\.php$/i, '').replace(/\/+$/, '');
+        return /^https?:\/\/[^\s/?#@]+(\/[^\s?#]*)?$/i.test(s) ? s : '';
+    }
+
+    function xtreamApiUrl(server, username, password, action) {
+        return server + '/player_api.php?username=' + encodeURIComponent(username) +
+            '&password=' + encodeURIComponent(password) + '&action=' + action;
+    }
+
+    // The address a playlist is downloaded from (and its stored copy is filed under).
+    function playlistAddress(pl) {
+        return pl.type === 'xtream' ? xtreamApiUrl(pl.server, pl.username, pl.password, 'get_live_streams') : pl.url;
+    }
+
+    // M3U text for an account's live channels, from player_api.php's
+    // categories ([{ category_id, category_name }]) and live streams
+    // ([{ num, name, stream_id, stream_icon, epg_channel_id, category_id }]).
+    // The values come from the server: quotes and line breaks are taken out
+    // so none can end an attribute or start a line of its own.
+    function xtreamM3u(server, username, password, categories, streams) {
+        function clean(v) { return String(v === null || v === undefined ? '' : v).replace(/["\r\n]+/g, ' ').trim(); }
+        var names = Object.create(null);
+        (Array.isArray(categories) ? categories : []).forEach(function (c) {
+            if (c && c.category_id !== undefined) names[String(c.category_id)] = clean(c.category_name);
+        });
+        var base = server + '/live/' + encodeURIComponent(username) + '/' + encodeURIComponent(password) + '/';
+        var lines = ['#EXTM3U'];
+        streams.forEach(function (st) {
+            var id = st ? String(st.stream_id === undefined ? '' : st.stream_id).replace(/[^0-9A-Za-z_-]/g, '') : '';
+            if (!id) return;
+            var attrs = 'tvg-id="' + clean(st.epg_channel_id) + '" tvg-logo="' + clean(st.stream_icon) + '"';
+            if (/^\d+$/.test(clean(st.num))) attrs += ' tvg-chno="' + clean(st.num) + '"';
+            attrs += ' group-title="' + (names[String(st.category_id)] || 'Other') + '"';
+            lines.push('#EXTINF:-1 ' + attrs + ',' + clean(st.name));
+            lines.push(base + id + '.ts');
+        });
+        return lines.join('\n') + '\n';
+    }
+
+    // Downloads an account's live categories and channels as M3U text.
+    function fetchXtreamText(pl) {
+        return Promise.all([
+            fetchText(xtreamApiUrl(pl.server, pl.username, pl.password, 'get_live_categories')),
+            fetchText(playlistAddress(pl))
+        ]).then(function (r) {
+            if (r[1].length > PLAYLIST_MAX_CHARS) throw new Error('Playlist is too large');
+            var categories, streams;
+            try { categories = JSON.parse(r[0]); streams = JSON.parse(r[1]); } catch (e) {
+                throw new Error('The server did not answer as an Xtream Codes server', { cause: e });
+            }
+            // A wrong login gets an object ({ user_info: { auth: 0 } }) instead of a list.
+            if (!Array.isArray(streams)) throw new Error('The server did not accept the username or password');
+            return xtreamM3u(pl.server, pl.username, pl.password, categories, streams);
+        });
+    }
+
+    // Replaces the places where addresses carry a password with dots: any
+    // "password=" value, the password in an Xtream stream address
+    // (/live/USER/PASSWORD/101.ts), and a login written into an address
+    // (http://user:PASSWORD@host). Used on everything the diagnostics keep.
+    // It works from the text alone and never reads the saved passwords.
+    function redactLogins(text) {
+        return String(text)
+            .replace(/(\bpassword=)[^&\s#]*/gi, '$1•••')
+            .replace(/(\/(?:live|movie|series|timeshift)\/[^/\s?#]+\/)[^/\s?#]+(?=\/)/gi, '$1•••')
+            .replace(/(\/\/[^/\s:@]+:)[^@\s/]+@/g, '$1•••@');
+    }
+
     // fetch with a time limit. A request that hangs (no route to the host,
     // rather than a quick refusal) would otherwise never settle, and the
     // loading indicator would stay on screen. options: extra fetch settings.
@@ -1462,7 +1710,7 @@
                     var req = db.transaction(PLAYLIST_STORE, 'readonly').objectStore(PLAYLIST_STORE).get(pl.id);
                     req.onsuccess = function () {
                         var e = req.result;
-                        finish(e && e.url === pl.url && e.text ? e : null);
+                        finish(e && e.url === playlistAddress(pl) && e.text ? e : null);
                     };
                     req.onerror = function () { finish(null); };
                 } catch (e) { finish(null); }
@@ -1475,7 +1723,7 @@
             if (!db) return;
             try {
                 db.transaction(PLAYLIST_STORE, 'readwrite').objectStore(PLAYLIST_STORE)
-                    .put({ id: pl.id, url: pl.url, text: text, time: Date.now() });
+                    .put({ id: pl.id, url: playlistAddress(pl), text: text, time: Date.now() });
             } catch (e) { /* non-fatal: the playlist is downloaded again next time */ }
         });
     }
@@ -1489,6 +1737,7 @@
 
     function channelsFromText(pl, text) {
         var parsed = parseM3U(text);
+        if (!parsed.length && pl.type === 'xtream') throw new Error('No live channels found');
         if (!parsed.length) throw new Error('No channels found');
         // Channel number: the playlist's tvg-chno when present, else list position.
         parsed.forEach(function (ch, i) {
@@ -1501,7 +1750,7 @@
 
     // Downloads a playlist, stores its text and resolves to { channels, text }.
     function downloadPlaylist(pl) {
-        return fetchText(pl.url)
+        return (pl.type === 'xtream' ? fetchXtreamText(pl) : fetchText(pl.url))
             .then(function (text) {
                 // A playlist far beyond any real one would only exhaust the TV's memory and storage.
                 if (text.length > PLAYLIST_MAX_CHARS) throw new Error('Playlist is too large');
@@ -1520,7 +1769,15 @@
             if (list && state.activePlaylistIds.indexOf(pl.id) !== -1) all = all.concat(list);
         });
         if (taggedMode === 'hide') all = all.filter(function (ch) { return !isTagged(ch); });
+        labelClashes(all);
         state.channels = all;
+        // Copies of one channel: same playlist and base name, in list order.
+        state.copyGroups = Object.create(null);
+        all.forEach(function (ch) {
+            ch.copyKey = ch.playlistId + '\u0001' + String(ch.baseName || ch.name || '').toLowerCase();
+            if (ch.baseName === 'Unnamed Channel') return;
+            (state.copyGroups[ch.copyKey] = state.copyGroups[ch.copyKey] || []).push(ch);
+        });
         // The section points at a category by position; positions change when
         // playlists do, so find the same category again afterwards.
         var shown = state.section.type === 'category' ? state.categories[state.section.index] : null;
@@ -1644,6 +1901,12 @@
             var raw = localStorage.getItem(FAVORITES_KEY);
             state.favorites = raw ? JSON.parse(raw) : [];
         } catch (e) { state.favorites = []; }
+        // Favorites saved before names were cleaned keep their old name, and
+        // ones saved with the marks in their name lose them (they are tags now).
+        state.favorites.forEach(function (f) {
+            if (!f.rawName) { f.rawName = f.name; f.name = cleanName(f.name) || f.name; }
+            f.name = withoutMarks(f.name) || f.name;
+        });
     }
 
     function saveFavorites() {
@@ -1667,7 +1930,7 @@
         if (!ch) return;
         var idx = state.favorites.findIndex(function (f) { return f.url === ch.url; });
         if (idx === -1) {
-            state.favorites.push({ name: ch.name, url: ch.url, logo: ch.logo, group: ch.group, tvgId: ch.tvgId, userAgent: ch.userAgent, tvgCountry: ch.tvgCountry, playlistId: ch.playlistId, number: ch.number });
+            state.favorites.push({ name: ch.name, rawName: ch.rawName, url: ch.url, logo: ch.logo, group: ch.group, tvgId: ch.tvgId, userAgent: ch.userAgent, tvgCountry: ch.tvgCountry, playlistId: ch.playlistId, number: ch.number });
             showToast('Added to Favorites');
         } else {
             state.favorites.splice(idx, 1);
@@ -2025,6 +2288,11 @@
                 hint: 'Type the address of an M3U or M3U8 playlist. You can also type from your phone with the SmartThings app.',
                 run: function () { openAddPlaylistScreen(null); }
             });
+            rows.push({
+                kind: 'action', label: 'Add an Xtream Codes account', detail: 'Server and login',
+                hint: 'Type the server address, username and password your provider gave you. Live TV shows the account’s live channels with their categories.',
+                run: function () { openAddPlaylistScreen(null, 'xtream'); }
+            });
             PRESET_PLAYLISTS.forEach(function (preset) {
                 if (state.playlists.some(function (p) { return p.url === preset.url; })) return;
                 rows.push({
@@ -2214,6 +2482,8 @@
 
         btn = settingButton(row.label, row.run);
         if (row.kind === 'toggle') {
+            btn.setAttribute('role', 'switch');
+            btn.setAttribute('aria-checked', row.on ? 'true' : 'false');
             btn.appendChild(buildSwitch(row.on));
         } else {
             value = document.createElement('span');
@@ -2277,7 +2547,7 @@
         name.textContent = pl.name;
         var url = document.createElement('span');
         url.className = 'playlist-url';
-        url.textContent = pl.url;
+        url.textContent = pl.type === 'xtream' ? pl.server + ' · ' + pl.username : pl.url;
         text.appendChild(name);
         text.appendChild(url);
         main.appendChild(text);
@@ -2612,68 +2882,114 @@
     // Add / Edit Playlist screen (native text field + Samsung system keyboard)
     // ==========================================================================
     var urlInput = document.getElementById('urlInput');
+    var xtreamServerInput = document.getElementById('xtreamServerInput');
+    var xtreamUserInput = document.getElementById('xtreamUserInput');
+    var xtreamPasswordInput = document.getElementById('xtreamPasswordInput');
+    var TEXT_FIELDS = [urlInput, xtreamServerInput, xtreamUserInput, xtreamPasswordInput];
+    var addMode = 'm3u';   // 'm3u' (one address) or 'xtream' (server, username, password)
 
-    function openAddPlaylistScreen(playlist) {
+    // The fields of the screen's current form, top to bottom.
+    function addFields() {
+        return addMode === 'xtream' ? [xtreamServerInput, xtreamUserInput, xtreamPasswordInput] : [urlInput];
+    }
+
+    function isTextField(el) {
+        return TEXT_FIELDS.indexOf(el) !== -1;
+    }
+
+    // playlist: the one to edit, or null to add one. mode: 'xtream' for a
+    // new Xtream Codes account; an edited playlist keeps its own kind.
+    function openAddPlaylistScreen(playlist, mode) {
         editingPlaylistId = playlist ? playlist.id : null;
-        urlInput.value = playlist ? playlist.url : 'https://';
-        document.getElementById('addPlaylistTitle').textContent = playlist ? 'Edit Playlist' : 'Add M3U Playlist';
+        addMode = playlist ? (playlist.type === 'xtream' ? 'xtream' : 'm3u') : (mode || 'm3u');
+        var xtream = addMode === 'xtream';
+        urlInput.hidden = xtream;
+        document.getElementById('xtreamFields').hidden = !xtream;
+        urlInput.value = playlist && !xtream ? playlist.url : 'https://';
+        xtreamServerInput.value = playlist && xtream ? playlist.server : '';
+        xtreamUserInput.value = playlist && xtream ? playlist.username : '';
+        xtreamPasswordInput.value = playlist && xtream ? playlist.password : '';
+        document.getElementById('addPlaylistTitle').textContent = xtream
+            ? (playlist ? 'Edit Xtream Account' : 'Add Xtream Codes Account')
+            : (playlist ? 'Edit Playlist' : 'Add M3U Playlist');
+        document.getElementById('addPlaylistHint').textContent = xtream
+            ? 'Enter the server address, username and password from your provider'
+            : 'Enter the URL of your M3U / M3U8 playlist';
         showScreen('screen-add');
         Focus.setZone('urlField', 0, 0);
     }
 
     // Focusing a real <input> opens Samsung's system keyboard (IME). That
     // system keyboard is also what the SmartThings phone app types into.
-    function openUrlKeyboard() {
-        urlInput.focus();
-        try { urlInput.setSelectionRange(urlInput.value.length, urlInput.value.length); } catch (e) { /* type=url may not support it */ }
+    function openFieldKeyboard(field) {
+        field.focus();
+        try { field.setSelectionRange(field.value.length, field.value.length); } catch (e) { /* type=url may not support it */ }
     }
 
-    function closeUrlKeyboard(moveToSave) {
-        urlInput.blur();
-        if (moveToSave) Focus.setZone('addActions', 0, 0);
-        else Focus.setZone('urlField', 0, 0);
+    // Done moves on to the next field (without opening it), or to Save after
+    // the last one; Cancel and Back stay on the field.
+    function closeFieldKeyboard(field, moveOn) {
+        field.blur();
+        var fields = addFields();
+        var row = Math.max(0, fields.indexOf(field));
+        if (!moveOn) Focus.setZone('urlField', row, 0);
+        else if (row < fields.length - 1) Focus.setZone('urlField', row + 1, 0);
+        else Focus.setZone('addActions', 0, 0);
     }
 
-    urlInput.addEventListener('click', openUrlKeyboard);
+    TEXT_FIELDS.forEach(function (field) {
+        field.addEventListener('click', function () { openFieldKeyboard(field); });
+    });
 
-    function submitPlaylistUrl() {
-        var url = urlInput.value.trim();
-        if (!/^https?:\/\/\S+\.\S+/i.test(url)) { showToast('Enter a valid playlist URL first'); return; }
-
+    // Saves the new or edited playlist, switches a new one on and loads it.
+    function savePlaylistEntry(fields) {
+        var pl;
         if (editingPlaylistId) {
-            var pl = state.playlists.find(function (p) { return p.id === editingPlaylistId; });
+            pl = state.playlists.find(function (p) { return p.id === editingPlaylistId; });
             if (!pl) return;
-            pl.url = url;
-            pl.name = deriveNameFromUrl(url);
+            Object.keys(fields).forEach(function (k) { pl[k] = fields[k]; });
             savePlaylists();
             switchToScreen('screen-settings');
             showToast('Playlist updated');
-            if (state.activePlaylistIds.indexOf(pl.id) !== -1) {
-                loadChannelsForPlaylist(pl).then(function (err) {
-                    if (err) showToast('Could not load "' + pl.name + '": ' + err.message);
-                });
-            }
+            if (state.activePlaylistIds.indexOf(pl.id) === -1) return;
         } else {
-            var newPl = { id: 'pl_' + Date.now(), name: deriveNameFromUrl(url), url: url };
-            state.playlists.push(newPl);
-            state.activePlaylistIds.push(newPl.id);
+            pl = { id: 'pl_' + Date.now() };
+            Object.keys(fields).forEach(function (k) { pl[k] = fields[k]; });
+            state.playlists.push(pl);
+            state.activePlaylistIds.push(pl.id);
             savePlaylists();
             saveActivePlaylistIds();
             switchToScreen('screen-settings');
             showToast('Playlist added');
-            loadChannelsForPlaylist(newPl).then(function (err) {
-                if (err) showToast('Could not load "' + newPl.name + '": ' + err.message);
-            });
         }
+        loadChannelsForPlaylist(pl).then(function (err) {
+            if (err) showToast('Could not load "' + pl.name + '": ' + err.message);
+        });
+    }
+
+    function submitPlaylistUrl() {
+        if (addMode === 'xtream') {
+            var server = normalizeXtreamServer(xtreamServerInput.value);
+            var username = xtreamUserInput.value.trim();
+            var password = xtreamPasswordInput.value;
+            if (!server) { showToast('Enter the server address first'); return; }
+            if (!username || !password) { showToast('Enter the username and password first'); return; }
+            // Named after the server only: names appear in the diagnostics.
+            savePlaylistEntry({ type: 'xtream', name: deriveNameFromUrl(server), server: server, username: username, password: password });
+            return;
+        }
+        var url = urlInput.value.trim();
+        if (!/^https?:\/\/\S+\.\S+/i.test(url)) { showToast('Enter a valid playlist URL first'); return; }
+        savePlaylistEntry({ name: deriveNameFromUrl(url), url: url });
     }
 
     Focus.zones.urlField = {
-        getMatrix: function () { return [[urlInput]]; },
+        getMatrix: function () { return addFields().map(function (f) { return [f]; }); },
         onEdge: function (dir) { if (dir === 'down') Focus.setZone('addActions', 0, 0); }
     };
     Focus.zones.addActions = {
         getMatrix: function () { return [Array.prototype.slice.call(document.querySelectorAll('.add-actions .btn'))]; },
-        onEdge: function (dir) { if (dir === 'up') Focus.setZone('urlField', 0, 0); }
+        onEdge: function (dir) { if (dir === 'up') Focus.setZone('urlField', addFields().length - 1, 0); }
     };
 
     document.getElementById('loadPlaylistBtn').addEventListener('click', submitPlaylistUrl);
@@ -2707,6 +3023,9 @@
         }
         state.watched = state.fullscreen;
         state.nowPlaying = ch;
+        // A channel the user picks starts again from its own copy.
+        state.copyTried = [ch.url];
+        state.copySwitches = 0;
         state.zapContext = context;
         state.zapList = list && list.length ? list : [ch];
         state.zapTitle = title || 'Channels';
@@ -2926,6 +3245,15 @@
         state.quality = '';
 
         document.getElementById('nowPlayingName').textContent = ch.name;
+        var tagsEl = document.getElementById('nowPlayingTags');
+        tagsEl.textContent = '';
+        channelTags(ch).forEach(function (tag) {
+            var t = document.createElement('span');
+            t.className = 'channel-tag';
+            t.textContent = tag;
+            tagsEl.appendChild(t);
+        });
+        tagsEl.hidden = !tagsEl.firstChild;
         document.getElementById('nowPlayingNumber').textContent = ch.number ? String(ch.number) : '';
         showOverlayProgramme();
         var logoEl = document.getElementById('nowPlayingLogo');
@@ -2941,6 +3269,9 @@
         tryNextEngine(state.playToken);
     }
 
+    // How many other copies a channel may switch to in one play-through.
+    var COPY_SWITCHES_MAX = 2;
+
     function tryNextEngine(token) {
         if (token !== state.playToken) return;
         var ch = state.nowPlaying;
@@ -2953,6 +3284,22 @@
             markFailed(ch, true);
             if (!state.fullscreen) renderLiveList();
             logEvent('could not play "' + ch.name + '": ' + (state.playErrors.join(' | ') || 'no player available'));
+            // Another copy of the same channel, if there is one: play it and say so.
+            var next = null;
+            if (state.copySwitches < COPY_SWITCHES_MAX && state.copyGroups && ch.copyKey) {
+                next = nextCopyFrom(state.copyGroups[ch.copyKey], ch, state.copyTried || [], function (c) { return !!failedChannels[c.url]; });
+            }
+            if (next) {
+                state.copyTried = (state.copyTried || []).concat([next.url]);
+                state.copySwitches = (state.copySwitches || 0) + 1;
+                var label = qualityLabel(next);
+                var msg = label ? 'Trying the ' + label + ' copy' : 'Trying another copy';
+                showToast(msg);
+                logEvent(msg + ' of "' + ch.name + '"');
+                state.nowPlaying = next;
+                startPlayback();
+                return;
+            }
             setPlayerStatus('Not available right now. The channel may be offline or blocked in your country.');
             unavailableToast();
             return;
@@ -3327,6 +3674,7 @@
             frag.appendChild(buildChannelRow(list[i], i === state.panelIndex ? ' selected focused' : ''));
         }
         box.appendChild(frag);
+        syncDomFocus();
     }
 
     function moveChannelPanel(delta) {
@@ -3462,11 +3810,12 @@
     };
 
     document.addEventListener('keydown', function (event) {
-        // While the URL field has focus the system keyboard is open: let it
+        // While a text field has focus the system keyboard is open: let it
         // handle typing/arrows (no preventDefault), and only react to Done/Cancel.
-        if (document.activeElement === urlInput) {
-            if (event.keyCode === IME_DONE) closeUrlKeyboard(true);
-            else if (event.keyCode === IME_CANCEL || event.keyCode === KEYCODE.BACK) closeUrlKeyboard(false);
+        var field = document.activeElement;
+        if (isTextField(field)) {
+            if (event.keyCode === IME_DONE) closeFieldKeyboard(field, true);
+            else if (event.keyCode === IME_CANCEL || event.keyCode === KEYCODE.BACK) closeFieldKeyboard(field, false);
             return;
         }
 

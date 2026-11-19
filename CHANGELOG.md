@@ -2,6 +2,51 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.13.1 (2026-11-19)
+Released version: v0.13.0 below plus these two changes, now on `main`.
+- Faster playlist reading: tidying channel names had made reading a 13,000-channel playlist about twice as slow. It is now close to the speed of v0.12.7 again, with the same names as before.
+- Diagnostics: passwords are hidden by where they sit in an address (a `password=` value, the password in an Xtream stream address, a login in an address) instead of by looking up the saved passwords.
+
+## v0.13.0 (2026-11-19, not released on its own)
+Everything from v0.12.8 to v0.12.16 below.
+- **Xtream Codes accounts** in Settings, Playlists: add one by server, username and password; its live channels and categories load like an M3U playlist. The password stays out of the diagnostics and Report a problem.
+- Tidier channel names: quality tags, two-letter country prefixes and emoji are left out; "[Geo-blocked]" and "[Not 24/7]" show as small tags in full screen instead. Channels with the same tidy name show their quality in brackets.
+- A channel that will not play tries the next copy of the same channel.
+- Fixed: sound with no picture when another player takes over from the Samsung player, and the Add screens hidden under the picture playing behind Settings.
+- Accessibility: Voice Guide follows the remote. The picture is dimmed behind the menu and Settings.
+
+## v0.12.16 (dev branch, not released yet)
+- Fixed: with a channel playing behind Settings, "Add a playlist" and "Add an Xtream Codes account" seemed to do nothing. Their screen opened under the picture. It now shows above it, on a floating panel like Settings, with lighter hint text so it reads over the picture.
+
+## v0.12.15 (dev branch, not released yet)
+- Fixed: a channel the Samsung player could not open, and the TV player or hls.js played instead, could play sound with no picture, because the Samsung player's surface stayed over the picture. It is now hidden whenever another player plays.
+
+## v0.12.14 (dev branch, not released yet)
+- Channel names no longer show "[Geo-blocked]" or "[Not 24/7]". These marks are now small tags under the channel's name in full screen. They still dim or hide the channel as set in Settings, Channels. Favorites saved with a mark in their name lose it the same way.
+
+## v0.12.13 (dev branch, not released yet)
+- Channels whose names are the same after tidying get their quality in brackets, so "BBC One FHD" and "BBC One SD" show as "BBC One (FHD)" and "BBC One (SD)". Copies are still matched by their plain name, so copy switching is unchanged. Two channels with the same name and no quality stay the same.
+
+## v0.12.12 (dev branch, not released yet)
+- Copies of a channel: when a channel will not play on any player, the app tries the next copy of the same channel (same playlist, same name, same tvg-id when both give one), such as HD after FHD. A toast and a diagnostics line say which copy it is trying. Copies that failed recently are tried last, and at most two other copies are tried in one go. The row in the list does not move.
+
+## v0.12.11 (dev branch, not released yet)
+- Channel names are tidied as the playlist loads: quality tags (FHD, UHD, HD, SD, 4K and resolutions such as 720p or 576p) and the small "ᴴᴰ" marks are left out, a two-letter country prefix such as "UK |" is removed, and emoji are removed. Three-letter prefixes such as "USA |" are kept. "[Geo-blocked]" and "[Not 24/7]" still dim a channel, because they are read from the name as the playlist gave it. Favorites saved earlier are tidied the same way.
+
+## v0.12.10 (dev branch, not released yet)
+- Playlists: **Xtream Codes accounts.** In Settings, Playlists, "Add an Xtream Codes account" takes the server address, username and password from your provider. The app asks the server's `player_api.php` for the live categories and live channels only, so they show in Live TV like an M3U playlist, without downloading the account's films and series. A wrong username or password says so. An account can be edited, switched off and deleted like any playlist.
+- Privacy: the password of an Xtream account is replaced with dots in the diagnostics list, the last app error and the error box, so it never reaches About or Report a problem. Settings shows the account's server and username only.
+- Each field opens the TV keyboard only when you press OK on it. Done on the keyboard moves to the next field, and from the password to Save.
+
+## v0.12.9 (dev branch, not released yet)
+- Accessibility: the TV's screen reader (Voice Guide) can follow the remote. The control the remote is on now also takes the browser's focus, so it is read out. Settings switches say whether they are on, channel rows and guide programmes read their name and programme, the menu's icons keep their names when the menu folds, and messages such as "Could not load" are announced.
+- The address field still opens the TV keyboard only when you press OK on it.
+- Repository: a WCAG 2.2 AA accessibility report (`ACCESSIBILITY_TEST_REPORT.md`), browser tests for the focus behaviour, and a leftover patch file removed.
+
+## v0.12.8 (dev branch, not released yet)
+- Remote: Up and Down return to the same button after passing a shorter row. Before, the focus jumped to the first button.
+- The picture behind the side menu, Settings and Add Playlist is dimmed, so the text reads clearly. The channel list keeps the picture bright.
+
 ## v0.12.7 (dev branch, not released yet)
 - Settings: the channel keeps playing while Settings is open, as it does behind the TV Guide, instead of stopping.
 

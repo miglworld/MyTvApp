@@ -241,6 +241,7 @@ button {
 .notice,
 .settings-cats,
 .settings-main,
+.add-playlist-panel,
 .channel-panel,
 .modal-box,
 .toast,
@@ -256,6 +257,7 @@ html:not(.avplay-active) .sidebar,
 html:not(.avplay-active) .live-channels,
 html:not(.avplay-active) .guide-panel,
 html:not(.avplay-active) .notice,
+html:not(.avplay-active) .add-playlist-panel,
 html:not(.avplay-active) .channel-panel,
 html:not(.avplay-active) .modal-box,
 html:not(.avplay-active) .toast,
@@ -269,6 +271,7 @@ html.avplay-active .sidebar,
 html.avplay-active .live-channels,
 html.avplay-active .guide-panel,
 html.avplay-active .notice,
+html.avplay-active .add-playlist-panel,
 html.avplay-active .channel-panel,
 html.avplay-active .modal-box,
 html.avplay-active .toast,
@@ -298,10 +301,20 @@ html.avplay-active .favorite-btn {
 }
 
 .sidebar.collapsed .brand,
-.sidebar.collapsed .menu-sub,
+.sidebar.collapsed .menu-sub {
+	display: none;
+}
+
+/* Collapsed to icons: the labels are hidden from sight but kept for
+   assistive technology, so each icon still has a name. */
 .sidebar.collapsed .menu-label,
 .sidebar.collapsed .menu-count {
-	display: none;
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
 }
 
 .sidebar.collapsed .menu-root {
@@ -348,6 +361,26 @@ html.avplay-active .favorite-btn {
 	flex: 1;
 	height: 100%;
 	position: relative;
+}
+
+/* Over the picture, under the screens and the sidebar. Fades in while the
+   menu or Settings is open, so the text and buttons read against a dark
+   background instead of moving video. */
+.video-dim {
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	z-index: 1;
+	background: rgba(0, 0, 0, 0.62);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.2s ease-out;
+}
+
+html.menu-dim .video-dim {
+	opacity: 1;
 }
 
 .screen {
@@ -1240,7 +1273,10 @@ html.avplay-active .favorite-btn {
 /* ==========================================================================
    Screen: Add / Edit Playlist
    ========================================================================== */
+/* Above the picture that keeps playing behind it (z-index 0), like the
+   other screens; without this the picture covered the whole screen. */
 #screen-add {
+	z-index: 2;
 	padding: 72px 72px;
 	display: none;
 }
@@ -1254,6 +1290,10 @@ html.avplay-active .favorite-btn {
 .add-playlist-panel {
 	width: 1300px;
 	max-width: 100%;
+	box-sizing: border-box;
+	/* The fields' radius (20px) plus this padding, so the corners match. */
+	padding: 36px;
+	border-radius: 56px;
 }
 
 .add-playlist-panel h2 {
@@ -1264,7 +1304,7 @@ html.avplay-active .favorite-btn {
 
 .add-playlist-panel .hint {
 	font-size: 22px;
-	color: #8e8e93;
+	color: #aeaeb2;
 	margin-bottom: 28px;
 }
 
@@ -1290,9 +1330,20 @@ html.avplay-active .favorite-btn {
 	transform: none;
 }
 
+.url-input[hidden] {
+	display: none;
+}
+
+.field-label {
+	display: block;
+	font-size: 22px;
+	color: #aeaeb2;
+	margin-bottom: 8px;
+}
+
 .input-tip {
 	font-size: 20px;
-	color: #636366;
+	color: #aeaeb2;
 	margin-bottom: 32px;
 }
 
@@ -1448,6 +1499,13 @@ html.avplay-active #screen-player {
 }
 
 html.avplay-active #videoPlayer {
+	visibility: hidden;
+}
+
+/* The other way round: when the TV player or hls.js plays (the Samsung
+   player failed or is not used), the Samsung player's object is positioned
+   above the <video> and would cover its picture while the sound plays. */
+html:not(.avplay-active) #avPlayer {
 	visibility: hidden;
 }
 
@@ -1620,6 +1678,26 @@ html.video-full .sidebar {
 	margin-top: 8px;
 	font-size: 22px;
 	color: #c7c7cc;
+}
+
+.now-playing-tags {
+	display: flex;
+	margin-top: 12px;
+}
+
+.now-playing-tags[hidden] {
+	display: none;
+}
+
+.channel-tag {
+	font-size: 18px;
+	font-weight: 600;
+	line-height: 1;
+	color: #e5e5ea;
+	padding: 6px 12px;
+	margin-right: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.32);
+	border-radius: 999px;
 }
 
 .favorite-btn {

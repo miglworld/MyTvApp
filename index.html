@@ -19,6 +19,7 @@ window.MYTVAPP_ERROR = function (text) {
 	if (!box) {
 		box = document.createElement('div');
 		box.id = 'errorBox';
+			box.setAttribute('role', 'alert');
 		box.style.cssText = 'position:fixed;left:40px;right:40px;bottom:40px;z-index:5000;padding:16px 24px;' +
 			'font:22px Arial,sans-serif;color:#fff;background:#7a1020;border-radius:8px;word-break:break-all';
 		(document.body || document.documentElement).appendChild(box);
@@ -32,6 +33,10 @@ window.onerror = function (msg, file, line) {
 </head>
 <body>
 	<div id="app">
+
+		<!-- Darkens the picture behind the menu and Settings. Shown by the app
+		     script (html.menu-dim). Sits under the screens and the sidebar. -->
+		<div class="video-dim" aria-hidden="true"></div>
 
 		<!-- Shown until the app script has started (it removes this). -->
 		<div id="bootMsg">Starting MyTvApp&hellip;</div>
@@ -103,7 +108,7 @@ window.onerror = function (msg, file, line) {
 						<div class="live-prog-desc" id="liveProgDesc"></div>
 						<div class="live-prog-next" id="liveProgNext"></div>
 					</div>
-					<div class="live-status" id="liveStatus"></div>
+					<div class="live-status" id="liveStatus" aria-live="polite"></div>
 					<div class="live-keys">OK full screen &nbsp;&middot;&nbsp; &#9654; favorite &nbsp;&middot;&nbsp; &#9664; menu</div>
 				</div>
 			</section>
@@ -145,9 +150,20 @@ window.onerror = function (msg, file, line) {
 			<section id="screen-add" class="screen">
 				<div class="add-playlist-panel">
 					<h2 id="addPlaylistTitle">Add M3U Playlist</h2>
-					<p class="hint">Enter the URL of your M3U / M3U8 playlist</p>
+					<p class="hint" id="addPlaylistHint">Enter the URL of your M3U / M3U8 playlist</p>
 					<input type="url" id="urlInput" class="url-input" value="https://"
-						autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+						aria-label="Playlist address (M3U or M3U8 URL)" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+					<div id="xtreamFields" hidden>
+						<label class="field-label" for="xtreamServerInput">Server</label>
+						<input type="url" id="xtreamServerInput" class="url-input" placeholder="http://server:port"
+							aria-label="Xtream server address" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+						<label class="field-label" for="xtreamUserInput">Username</label>
+						<input type="text" id="xtreamUserInput" class="url-input"
+							aria-label="Xtream username" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+						<label class="field-label" for="xtreamPasswordInput">Password</label>
+						<input type="password" id="xtreamPasswordInput" class="url-input"
+							aria-label="Xtream password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+					</div>
 					<p class="input-tip">Press OK on the field to type. You can also type from
 						your phone with the SmartThings app keyboard while the TV keyboard is open.</p>
 					<div class="add-actions">
@@ -166,6 +182,7 @@ window.onerror = function (msg, file, line) {
 						<div>
 							<div class="now-playing-name"><span class="now-playing-number" id="nowPlayingNumber"></span><span id="nowPlayingName"></span></div>
 							<div class="now-playing-group" id="nowPlayingGroup"></div>
+							<div class="now-playing-tags" id="nowPlayingTags" hidden></div>
 							<div class="player-status" id="playerStatus"></div>
 						</div>
 					</div>
@@ -186,14 +203,14 @@ window.onerror = function (msg, file, line) {
 
 		<!-- Shown over every screen (they used to sit inside one screen and
 		     were invisible on the others). -->
-		<div class="loading-indicator" id="loadingIndicator" hidden>
+		<div class="loading-indicator" id="loadingIndicator" role="status" hidden>
 			<div class="spinner"></div>
 			<p>Loading playlist&hellip;</p>
 		</div>
-		<div class="toast" id="toast"></div>
+		<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 		<!-- A downloaded update asks here, in the corner, whether to restart into it. -->
-		<div class="notice" id="updateNotice" hidden>
+		<div class="notice" id="updateNotice" role="status" aria-live="polite" hidden>
 			<div class="notice-title">Update available</div>
 			<div class="notice-text" id="updateNoticeText"></div>
 			<div class="notice-actions">
@@ -203,7 +220,7 @@ window.onerror = function (msg, file, line) {
 		</div>
 
 		<!-- ===================== Confirm Dialog ===================== -->
-		<div class="modal-overlay" id="confirmModal" hidden>
+		<div class="modal-overlay" id="confirmModal" role="alertdialog" aria-modal="true" aria-describedby="confirmMessage" hidden>
 			<div class="modal-box">
 				<p id="confirmMessage"></p>
 				<div class="modal-actions">
