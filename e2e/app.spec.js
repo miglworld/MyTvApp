@@ -136,7 +136,7 @@ test('navigation: Up and Down return to the same button after a shorter row', as
 });
 
 // The picture behind the menu and Settings is dimmed; the channel list keeps it bright.
-test('dim: the picture is dimmed under the menu and Settings, not in the channel list', async ({ page }) => {
+test('dim: the picture is dimmed under the menu only, not in the channel list or Settings', async ({ page }) => {
     await open(page);
     const dimmed = () => page.evaluate(() => document.documentElement.classList.contains('menu-dim'));
     expect(await dimmed()).toBe(false);          // the channel list is up
@@ -145,8 +145,8 @@ test('dim: the picture is dimmed under the menu and Settings, not in the channel
     await press(page, KEY.RIGHT);                // back to the channel list
     expect(await dimmed()).toBe(false);
     await page.click('#navSettings');
-    expect(await dimmed()).toBe(true);
-    await page.screenshot({ path: test.info().outputPath('settings-dim.png') });
+    expect(await dimmed()).toBe(false);          // Settings: its darker panels, no dimming
+    await page.screenshot({ path: test.info().outputPath('settings-no-dim.png') });
 });
 
 test('report a problem: the drawn QR code opens a filled-in GitHub issue, with logins cut out', async ({ page }) => {
@@ -753,4 +753,22 @@ test('full screen: the dark shade shows only while the channel info is on screen
     await expect.poll(shade).toEqual({ visible: true, opacity: '1', gradient: true });
     // The info hides by itself a few seconds after the picture plays; the shade goes with it.
     await expect.poll(shade, { timeout: 15000 }).toEqual({ visible: false, opacity: '0', gradient: true });
+});
+
+// Settings floats on the same glass as the other screens, whether the Samsung
+// player is drawing the picture behind it or not.
+test('settings: its panels have the same glass as the channel list and the guide', async ({ page }) => {
+    await open(page);
+    const glass = (sel) => page.evaluate((s) => {
+        const cs = getComputedStyle(document.querySelector(s));
+        return { background: cs.backgroundImage + ' ' + cs.backgroundColor, blur: cs.backdropFilter || cs.webkitBackdropFilter || '' };
+    }, sel);
+    for (const samsungPlayer of [true, false]) {
+        await page.evaluate((on) => document.documentElement.classList.toggle('avplay-active', on), samsungPlayer);
+        const list = await glass('.live-channels');
+        expect(await glass('.settings-main')).toEqual(list);
+        expect(await glass('.settings-cats')).toEqual(list);
+        expect(await glass('.guide-panel')).toEqual(list);
+        expect(await glass('.add-playlist-panel')).toEqual(list);
+    }
 });

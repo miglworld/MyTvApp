@@ -2,6 +2,11 @@
 
 MyTvApp's own history starts at v0.1. Newest first.
 
+## v0.13.7 (dev branch, not released yet)
+- One panel look on every page: the channel list, TV Guide, Settings and the Add screens share the same darker glass. Settings was lighter than the rest and let the picture tint it.
+- On the TV, while the Samsung player shows the picture, every panel (and the menu, notices and toasts) is nearly solid. The TV showed see-through panels much lighter than they are, with a lavender wash.
+- The picture behind Settings and the Add screens is no longer dimmed; their darker panels keep the text readable. Only the menu still dims the picture.
+
 ## v0.13.6 (dev branch, not released yet)
 - Tests: the speed budget test slows every machine to the same reference speed (the owner's Mac slowed six times), measured by a short workload first, so a slower GitHub runner is not judged more harshly. The 500 ms and 300 ms limits are unchanged.
 - Full screen: a darker, taller shade rises from the bottom while the channel info is on screen, so its text and the key hints read over a bright picture. It goes when the info does.
