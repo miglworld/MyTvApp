@@ -40,7 +40,7 @@ jobs:
           ghcr.io/zaproxy/zaproxy:2.16.0
           zap-baseline.py -t http://127.0.0.1:8765/index.html -r zap-report.html -J zap-report.json -I
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: zap-report
           path: |
@@ -68,7 +68,7 @@ jobs:
       - name: Fail above the limits
         run: npx --yes @lhci/cli@0.14.0 assert --config=.lighthouserc.json
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lighthouse
           path: lighthouse/
